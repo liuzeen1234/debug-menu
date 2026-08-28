@@ -1,0 +1,30 @@
+{
+    "schemaVersion": 1,
+    "id": "debug-menu",
+    "version": "${version}",
+    "name": "Debug Menu",
+    "description": "独立的调试工具 Mod：统一的调试开关菜单、实体血量与手持物品 HUD、玩家行为实时日志，并开放 API 供其他 Mod 注册自己的调试开关。",
+    "authors": ["liuzeen1234"],
+    "contact": {
+        "email": "liuzeen1234@qq.com"
+    },
+    "license": "MIT",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            "com.debugmenu.DebugMenuMod"
+        ],
+        "client": [
+            "com.debugmenu.client.DebugMenuClient"
+        ]
+    },
+    "mixins": [
+        "debug-menu.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.15.0",
+        "minecraft": "~1.20.4",
+        "java": ">=17",
+        "fabric-api": "*"
+    }
+}
