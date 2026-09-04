@@ -2,13 +2,19 @@ package com.debugmenu.client;
 
 import com.debugmenu.api.DebugMenuApi;
 import com.debugmenu.api.DebugToggleEntry;
+import com.debugmenu.api.DebugValueEntry;
+import com.debugmenu.network.DebugValueRequestC2SPacket;
+import com.debugmenu.network.DebugValueSyncS2CPacket;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 调试功能菜单主屏幕。
@@ -38,6 +44,9 @@ public class DebugMenuScreen extends Screen {
     /** 内容总高度 */
     private int totalContentHeight = 0;
 
+    /** 当前可见的滑条控件，按 key 索引，供收到服务端回写时刷新。 */
+    private final Map<String, DebugValueSliderWidget> visibleSliders = new java.util.HashMap<>();
+
     public DebugMenuScreen() {
         super(Text.literal("调试功能菜单"));
     }
@@ -45,7 +54,43 @@ public class DebugMenuScreen extends Screen {
     @Override
     protected void init() {
         this.scrollOffset = 0;
+
+        // 注册服务端回写监听：收到真实值后刷新对应滑条
+        DebugValueSyncS2CPacket.setListener((key, value) -> {
+            if (this.client != null) {
+                this.client.execute(() -> {
+                    DebugValueSliderWidget slider = visibleSliders.get(key);
+                    if (slider != null) {
+                        slider.refreshFromEntry();
+                    }
+                });
+            }
+        });
+
+        // 打开菜单时向服务端请求所有数值条目的真实当前值（仅在已连接时）
+        if (DebugMenuApi.hasValueEntries() && ClientPlayNetworking.canSend(DebugValueRequestC2SPacket.CHANNEL)) {
+            DebugValueRequestC2SPacket.sendAll();
+        }
+
         rebuildWidgets();
+    }
+
+    @Override
+    public void removed() {
+        // 屏幕关闭时清除监听，避免悬挂引用
+        DebugValueSyncS2CPacket.setListener(null);
+        super.removed();
+    }
+
+    /**
+     * 合并布尔与数值条目的 modId，保持插入顺序（布尔在前）。
+     */
+    private Set<String> allModIds(Map<String, List<DebugToggleEntry>> toggles,
+                                  Map<String, List<DebugValueEntry>> values) {
+        Set<String> ids = new LinkedHashSet<>();
+        ids.addAll(toggles.keySet());
+        ids.addAll(values.keySet());
+        return ids;
     }
 
     private void rebuildWidgets() {
@@ -67,16 +112,20 @@ public class DebugMenuScreen extends Screen {
             return;
         }
 
+        visibleSliders.clear();
+
         Map<String, List<DebugToggleEntry>> grouped = DebugMenuApi.getEntriesByMod();
+        Map<String, List<DebugValueEntry>> valueGrouped = DebugMenuApi.getValueEntriesByMod();
         int centerX = this.width / 2 - BUTTON_WIDTH / 2;
         int y = TOP_MARGIN - scrollOffset;
 
-        for (Map.Entry<String, List<DebugToggleEntry>> group : grouped.entrySet()) {
+        for (String modId : allModIds(grouped, valueGrouped)) {
             // Mod 分组标题占用空间
             y += GROUP_HEADER_HEIGHT;
 
             // 每个开关一个按钮
-            for (DebugToggleEntry entry : group.getValue()) {
+            List<DebugToggleEntry> toggles = grouped.getOrDefault(modId, List.of());
+            for (DebugToggleEntry entry : toggles) {
                 if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
                     // 按钮在可视区域内
                     final DebugToggleEntry finalEntry = entry;
@@ -88,6 +137,18 @@ public class DebugMenuScreen extends Screen {
                             }
                     ).dimensions(centerX, y, BUTTON_WIDTH, BUTTON_HEIGHT).build();
                     this.addDrawableChild(btn);
+                }
+                y += GAP;
+            }
+
+            // 每个数值条目一个滑条
+            List<DebugValueEntry> values = valueGrouped.getOrDefault(modId, List.of());
+            for (DebugValueEntry entry : values) {
+                if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
+                    DebugValueSliderWidget slider =
+                            new DebugValueSliderWidget(centerX, y, BUTTON_WIDTH, BUTTON_HEIGHT, entry);
+                    this.addDrawableChild(slider);
+                    visibleSliders.put(entry.getKey(), slider);
                 }
                 y += GAP;
             }
@@ -132,19 +193,22 @@ public class DebugMenuScreen extends Screen {
         } else {
             // 绘制分组标题
             Map<String, List<DebugToggleEntry>> grouped = DebugMenuApi.getEntriesByMod();
+            Map<String, List<DebugValueEntry>> valueGrouped = DebugMenuApi.getValueEntriesByMod();
             int y = TOP_MARGIN - scrollOffset;
 
-            for (Map.Entry<String, List<DebugToggleEntry>> group : grouped.entrySet()) {
+            for (String modId : allModIds(grouped, valueGrouped)) {
                 // 绘制 mod 分组标题
                 if (y > TOP_MARGIN - 15 && y < this.height - BOTTOM_MARGIN) {
-                    String header = "── " + group.getKey() + " ──";
+                    String header = "── " + modId + " ──";
                     context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(header),
                             this.width / 2, y + 3, 0xFFFF55);
                 }
                 y += GROUP_HEADER_HEIGHT;
 
-                // 跳过按钮区域
-                y += group.getValue().size() * GAP;
+                // 跳过按钮/滑条区域（布尔 + 数值）
+                int rows = grouped.getOrDefault(modId, List.of()).size()
+                        + valueGrouped.getOrDefault(modId, List.of()).size();
+                y += rows * GAP;
 
                 // 分组间距
                 y += 6;

@@ -21,6 +21,15 @@ public final class DebugMenuApi {
 
     private static final List<DebugToggleEntry> entries = new CopyOnWriteArrayList<>();
 
+    /**
+     * 数值条目注册表。
+     *
+     * <p><b>注意：</b>与布尔条目不同，这份注册表在方案 B 下<b>客户端和服务端都会填充</b>
+     * （服务端注册 setter 用于收包后执行，客户端注册 getter/setter 用于 UI）。
+     * 因此不能再假设"只有客户端碰"。这里沿用 {@link CopyOnWriteArrayList} 保证线程安全。
+     */
+    private static final List<DebugValueEntry> valueEntries = new CopyOnWriteArrayList<>();
+
     private DebugMenuApi() {}
 
     /**
@@ -52,10 +61,13 @@ public final class DebugMenuApi {
     }
 
     /**
-     * 是否有已注册的调试开关。
+     * 是否有任何已注册的条目（布尔开关或数值条目任一非空）。
+     *
+     * <p>菜单据此判断是否显示"无可控制的开关"。只要有数值条目也应视为有内容，
+     * 否则纯数值场景会误报为空。
      */
     public static boolean hasEntries() {
-        return !entries.isEmpty();
+        return !entries.isEmpty() || !valueEntries.isEmpty();
     }
 
     /**
@@ -94,5 +106,68 @@ public final class DebugMenuApi {
     public static boolean isEnabled(String key) {
         DebugToggleEntry entry = getEntry(key);
         return entry != null && entry.isEnabled();
+    }
+
+    // ==================== 数值条目 ====================
+
+    /**
+     * 注册一个调试数值条目（滑条）。
+     *
+     * <p>同一个 key 需要在客户端与服务端各注册一次，见 {@link DebugValueEntry} 的说明。
+     *
+     * @param entry 数值条目
+     */
+    public static void registerValue(DebugValueEntry entry) {
+        Objects.requireNonNull(entry, "DebugValueEntry cannot be null");
+        valueEntries.add(entry);
+    }
+
+    /**
+     * 批量注册数值条目。
+     */
+    public static void registerAllValues(Collection<DebugValueEntry> newEntries) {
+        for (DebugValueEntry entry : newEntries) {
+            registerValue(entry);
+        }
+    }
+
+    /**
+     * 获取所有已注册的数值条目（只读视图）。
+     */
+    public static List<DebugValueEntry> getValueEntries() {
+        return Collections.unmodifiableList(valueEntries);
+    }
+
+    /**
+     * 是否有已注册的数值条目。
+     */
+    public static boolean hasValueEntries() {
+        return !valueEntries.isEmpty();
+    }
+
+    /**
+     * 按 modId 分组获取所有数值条目。
+     */
+    public static Map<String, List<DebugValueEntry>> getValueEntriesByMod() {
+        Map<String, List<DebugValueEntry>> grouped = new LinkedHashMap<>();
+        for (DebugValueEntry entry : valueEntries) {
+            grouped.computeIfAbsent(entry.getModId(), k -> new ArrayList<>()).add(entry);
+        }
+        return grouped;
+    }
+
+    /**
+     * 根据 key 查找数值条目。
+     *
+     * @param key 条目的唯一标识
+     * @return 对应条目，未找到返回 null
+     */
+    public static DebugValueEntry getValueEntry(String key) {
+        for (DebugValueEntry entry : valueEntries) {
+            if (entry.getKey().equals(key)) {
+                return entry;
+            }
+        }
+        return null;
     }
 }

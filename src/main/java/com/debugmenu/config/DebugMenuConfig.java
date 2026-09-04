@@ -35,6 +35,9 @@ public class DebugMenuConfig {
         /** 各开关状态：key -> enabled */
         public Map<String, Boolean> toggleStates = new HashMap<>();
 
+        /** 各数值条目状态：key -> value */
+        public Map<String, Integer> valueStates = new HashMap<>();
+
         // === 实体血量 HUD ===
         public boolean entityHealthHudEnabled = false;
         public double entityHealthHudReachDistance = 128.0;
@@ -87,6 +90,31 @@ public class DebugMenuConfig {
      */
     public static void setToggleState(String key, boolean enabled) {
         data.toggleStates.put(key, enabled);
+        save();
+    }
+
+    // ==================== 数值状态存取 ====================
+
+    /**
+     * 获取某个数值条目的持久化状态。
+     * 如果从未设置过，返回 defaultValue。
+     */
+    public static int getValueState(String key, int defaultValue) {
+        // 防御空 map（旧配置文件可能没有该字段）
+        if (data.valueStates == null) {
+            data.valueStates = new HashMap<>();
+        }
+        return data.valueStates.getOrDefault(key, defaultValue);
+    }
+
+    /**
+     * 设置某个数值条目的持久化状态。
+     */
+    public static void setValueState(String key, int value) {
+        if (data.valueStates == null) {
+            data.valueStates = new HashMap<>();
+        }
+        data.valueStates.put(key, value);
         save();
     }
 

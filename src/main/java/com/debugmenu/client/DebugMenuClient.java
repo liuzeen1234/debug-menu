@@ -2,7 +2,9 @@ package com.debugmenu.client;
 
 import com.debugmenu.api.DebugMenuApi;
 import com.debugmenu.api.DebugToggleEntry;
+import com.debugmenu.api.DebugValueEntry;
 import com.debugmenu.config.DebugMenuConfig;
+import com.debugmenu.network.DebugValueSyncS2CPacket;
 import com.debugmenu.network.EntityNbtResponseS2CPacket;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -31,6 +33,9 @@ public class DebugMenuClient implements ClientModInitializer {
     /** 行为日志开关状态（调试 Mod 自带功能） */
     private static boolean behaviorLogEnabled = false;
 
+    /** 测试滑条的本地值（客户端 UI 演示用，验证方案 B 数值通道） */
+    private static int testSliderValue = 10;
+
     @Override
     public void onInitializeClient() {
         // 加载配置
@@ -49,8 +54,23 @@ public class DebugMenuClient implements ClientModInitializer {
                 }
         ));
 
+        // 注册一个测试数值条目（客户端 UI 侧），验证方案 B 的滑条 + 同步
+        testSliderValue = DebugMenuConfig.getValueState("test_slider", 10);
+        DebugMenuApi.registerValue(new DebugValueEntry(
+                "debug-menu", "debug-menu:test_slider", "测试滑条",
+                0, 32,
+                () -> testSliderValue,
+                (v) -> {
+                    testSliderValue = v;
+                    DebugMenuConfig.setValueState("test_slider", v);
+                }
+        ));
+
         // 注册实体 NBT 响应包的客户端接收器
         EntityNbtResponseS2CPacket.registerClientReceiver();
+
+        // 注册数值同步回写包的客户端接收器（方案 B）
+        DebugValueSyncS2CPacket.registerClientReceiver();
 
         // 注册按键绑定: 打开调试功能菜单（默认无绑定）
         openDebugMenuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
