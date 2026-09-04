@@ -55,8 +55,9 @@ public class DebugValueSyncS2CPacket {
             String key = buf.readString();
             int value = buf.readInt();
             client.execute(() -> {
-                // 更新客户端本地条目值（供 UI 显示）
-                DebugValueEntry entry = DebugMenuApi.getValueEntry(key);
+                // 更新客户端本地条目值（供 UI 显示）。只认 CLIENT（含 BOTH）侧，
+                // 避免单人环境下误更新到服务端那条字段而 UI 不刷新。
+                DebugValueEntry entry = DebugMenuApi.getValueEntry(key, DebugValueEntry.Side.CLIENT);
                 if (entry != null) {
                     entry.setValue(value);
                 }

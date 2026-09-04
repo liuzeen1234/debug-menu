@@ -146,7 +146,9 @@ public final class DebugMenuApi {
     }
 
     /**
-     * 按 modId 分组获取所有数值条目。
+     * 按 modId 分组获取所有数值条目（不过滤 side，可能含同 key 的两侧重复）。
+     *
+     * <p>一般应使用 {@link #getValueEntriesByMod(DebugValueEntry.Side)} 以按 side 过滤并去重。
      */
     public static Map<String, List<DebugValueEntry>> getValueEntriesByMod() {
         Map<String, List<DebugValueEntry>> grouped = new LinkedHashMap<>();
@@ -157,7 +159,34 @@ public final class DebugMenuApi {
     }
 
     /**
-     * 根据 key 查找数值条目。
+     * 按 modId 分组获取匹配指定 side 的数值条目，并<b>按 key 去重</b>。
+     *
+     * <p>单人环境下同一个 key 会有客户端和服务端两条 entry；此方法只保留匹配 {@code side}
+     * （或 {@link DebugValueEntry.Side#BOTH}）的条目，并对同 key 只保留先注册的一条，避免
+     * UI 重复渲染。
+     *
+     * @param side 查询侧（UI 用 {@link DebugValueEntry.Side#CLIENT}）
+     */
+    public static Map<String, List<DebugValueEntry>> getValueEntriesByMod(DebugValueEntry.Side side) {
+        Map<String, List<DebugValueEntry>> grouped = new LinkedHashMap<>();
+        Set<String> seenKeys = new HashSet<>();
+        for (DebugValueEntry entry : valueEntries) {
+            if (!entry.matchesSide(side)) {
+                continue;
+            }
+            if (!seenKeys.add(entry.getKey())) {
+                continue; // 同 key 已收录，去重
+            }
+            grouped.computeIfAbsent(entry.getModId(), k -> new ArrayList<>()).add(entry);
+        }
+        return grouped;
+    }
+
+    /**
+     * 根据 key 查找数值条目（不过滤 side，返回先注册的一条）。
+     *
+     * <p>在同 key 两端注册的场景下这可能返回错误的一侧，一般应使用
+     * {@link #getValueEntry(String, DebugValueEntry.Side)}。
      *
      * @param key 条目的唯一标识
      * @return 对应条目，未找到返回 null
@@ -165,6 +194,26 @@ public final class DebugMenuApi {
     public static DebugValueEntry getValueEntry(String key) {
         for (DebugValueEntry entry : valueEntries) {
             if (entry.getKey().equals(key)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 根据 key 和 side 查找数值条目。
+     *
+     * <p>只返回匹配该 side（或 {@link DebugValueEntry.Side#BOTH}）的条目。网络层据此确保：
+     * C2S 收包用 {@link DebugValueEntry.Side#SERVER} 拿到服务端那条，S2C 回写用
+     * {@link DebugValueEntry.Side#CLIENT} 拿到客户端那条。
+     *
+     * @param key  条目的唯一标识
+     * @param side 查询侧
+     * @return 对应条目，未找到返回 null
+     */
+    public static DebugValueEntry getValueEntry(String key, DebugValueEntry.Side side) {
+        for (DebugValueEntry entry : valueEntries) {
+            if (entry.getKey().equals(key) && entry.matchesSide(side)) {
                 return entry;
             }
         }

@@ -32,12 +32,16 @@ public class DebugMenuMod implements ModInitializer {
         DebugValueSyncC2SPacket.registerServerReceiver();
         DebugValueRequestC2SPacket.registerServerReceiver();
 
-        // 注册测试数值条目（服务端侧）：与客户端同 key，setter 服务于收包后执行
+        // 注册测试数值条目（服务端侧）：与客户端同 key，setter 服务于收包后执行。
+        // 标记 Side.SERVER，与客户端那条区分。
+        // 注意（样板局限）：这里的 testSliderValue 是纯内存字段，服务端重启即丢失。
+        // 真实接入应在 setter 里把值落盘（如 strike_beacon 写 StrikeConfig），别照抄这一点。
         DebugMenuApi.registerValue(new DebugValueEntry(
                 "debug-menu", "debug-menu:test_slider", "测试滑条",
-                0, 32,
+                0, 32, 1,
                 () -> testSliderValue,
-                (v) -> testSliderValue = v
+                (v) -> testSliderValue = v,
+                null, null, DebugValueEntry.Side.SERVER
         ));
     }
 }

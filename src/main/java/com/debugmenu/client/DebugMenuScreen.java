@@ -115,7 +115,9 @@ public class DebugMenuScreen extends Screen {
         visibleSliders.clear();
 
         Map<String, List<DebugToggleEntry>> grouped = DebugMenuApi.getEntriesByMod();
-        Map<String, List<DebugValueEntry>> valueGrouped = DebugMenuApi.getValueEntriesByMod();
+        // 只取客户端（含 BOTH）侧条目并按 key 去重，避免单人环境下同 key 两侧重复渲染。
+        Map<String, List<DebugValueEntry>> valueGrouped =
+                DebugMenuApi.getValueEntriesByMod(DebugValueEntry.Side.CLIENT);
         int centerX = this.width / 2 - BUTTON_WIDTH / 2;
         int y = TOP_MARGIN - scrollOffset;
 
@@ -193,7 +195,8 @@ public class DebugMenuScreen extends Screen {
         } else {
             // 绘制分组标题
             Map<String, List<DebugToggleEntry>> grouped = DebugMenuApi.getEntriesByMod();
-            Map<String, List<DebugValueEntry>> valueGrouped = DebugMenuApi.getValueEntriesByMod();
+            Map<String, List<DebugValueEntry>> valueGrouped =
+                    DebugMenuApi.getValueEntriesByMod(DebugValueEntry.Side.CLIENT);
             int y = TOP_MARGIN - scrollOffset;
 
             for (String modId : allModIds(grouped, valueGrouped)) {

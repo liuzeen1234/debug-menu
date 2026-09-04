@@ -41,8 +41,11 @@ public class DebugValueRequestC2SPacket {
     }
 
     private static void handle(ServerPlayerEntity player) {
+        // 只回写服务端权威值：遍历 SERVER（含 BOTH）侧条目，避免把客户端那条的本地值当真实值下发。
         for (DebugValueEntry entry : DebugMenuApi.getValueEntries()) {
-            DebugValueSyncS2CPacket.send(player, entry.getKey(), entry.getValue());
+            if (entry.matchesSide(DebugValueEntry.Side.SERVER)) {
+                DebugValueSyncS2CPacket.send(player, entry.getKey(), entry.getValue());
+            }
         }
     }
 }

@@ -48,7 +48,8 @@ public class DebugValueSyncC2SPacket {
     }
 
     private static void handle(ServerPlayerEntity player, String key, int requested) {
-        DebugValueEntry entry = DebugMenuApi.getValueEntry(key);
+        // 服务端只认 SERVER（含 BOTH）侧的条目，避免单人环境下误取到客户端那条。
+        DebugValueEntry entry = DebugMenuApi.getValueEntry(key, DebugValueEntry.Side.SERVER);
         if (entry == null) {
             // 未在服务端注册该 key —— 忽略（陌生/拼错的 key）
             DebugMenuMod.LOGGER.warn("[DebugMenu] Ignoring value_sync for unknown key '{}' from {}",

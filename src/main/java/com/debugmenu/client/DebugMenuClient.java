@@ -54,16 +54,18 @@ public class DebugMenuClient implements ClientModInitializer {
                 }
         ));
 
-        // 注册一个测试数值条目（客户端 UI 侧），验证方案 B 的滑条 + 同步
+        // 注册一个测试数值条目（客户端 UI 侧），验证方案 B 的滑条 + 同步。
+        // 标记 Side.CLIENT：单人环境下与 DebugMenuMod 注册的服务端条目区分开，避免值分裂/UI 重复。
         testSliderValue = DebugMenuConfig.getValueState("test_slider", 10);
         DebugMenuApi.registerValue(new DebugValueEntry(
                 "debug-menu", "debug-menu:test_slider", "测试滑条",
-                0, 32,
+                0, 32, 1,
                 () -> testSliderValue,
                 (v) -> {
                     testSliderValue = v;
                     DebugMenuConfig.setValueState("test_slider", v);
-                }
+                },
+                null, null, DebugValueEntry.Side.CLIENT
         ));
 
         // 注册实体 NBT 响应包的客户端接收器
