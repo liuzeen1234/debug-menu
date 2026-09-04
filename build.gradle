@@ -3,11 +3,44 @@ plugins {
     id 'java'
 }
 
-version = '1.0.0'
+// ============================================================
+// 多版本支持：通过 -Pmc=<版本> 选择编译目标
+//   ./gradlew build -Pmc=1.20.1
+//   ./gradlew build -Pmc=1.20.4
+// 不指定时使用 gradle.properties 中的 default_mc
+// ============================================================
+ext.supportedVersions = [
+        '1.20.1': [
+                minecraft : '1.20.1',
+                yarn      : '1.20.1+build.10',
+                // fabric-api 0.92.2+1.20.1 要求 loader >= 0.15.6
+                loader    : '0.15.11',
+                fabricApi : '0.92.2+1.20.1',
+                dependency: '~1.20.1'
+        ],
+        '1.20.4': [
+                minecraft : '1.20.4',
+                yarn      : '1.20.4+build.3',
+                loader    : '0.15.11',
+                fabricApi : '0.97.1+1.20.4',
+                dependency: '~1.20.4'
+        ]
+]
+
+def mcTarget = (project.findProperty('mc') ?: project.property('default_mc')).toString()
+def target = supportedVersions[mcTarget]
+if (target == null) {
+    throw new GradleException("Unsupported Minecraft target [${mcTarget}]. Supported: ${supportedVersions.keySet().join(', ')}")
+}
+logger.lifecycle("[debug-menu] building for Minecraft ${target.minecraft} (fabric-api ${target.fabricApi})")
+
+// 产物名带上游戏版本，例如 debug-menu-mc1.20.1-1.0.0.jar
+def modVersion = project.property('mod_version').toString()
+version = modVersion
 group = 'com.debugmenu'
 
 base {
-    archivesName = 'debug-menu'
+    archivesName = "debug-menu-mc${target.minecraft}"
 }
 
 repositories {
@@ -16,19 +49,23 @@ repositories {
 
 dependencies {
     // Minecraft
-    minecraft "com.mojang:minecraft:1.20.4"
-    mappings "net.fabricmc:yarn:1.20.4+build.3:v2"
-    modImplementation "net.fabricmc:fabric-loader:0.15.3"
+    minecraft "com.mojang:minecraft:${target.minecraft}"
+    mappings "net.fabricmc:yarn:${target.yarn}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${target.loader}"
 
     // Fabric API
-    modImplementation "net.fabricmc.fabric-api:fabric-api:0.97.1+1.20.4"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
 }
 
+// fabric.mod.json 里保留完整版本号（含游戏版本），便于在游戏内 Mod 列表中辨识
+def metadataVersion = "${modVersion}+mc${target.minecraft}"
+
 processResources {
-    inputs.property "version", project.version
+    inputs.property "version", metadataVersion
+    inputs.property "minecraft_dependency", target.dependency
 
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        expand "version": metadataVersion, "minecraft_dependency": target.dependency
     }
 }
 

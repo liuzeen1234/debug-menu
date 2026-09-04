@@ -118,7 +118,7 @@ public class DebugMenuScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+        ScreenCompat.renderMenuBackground(context, this.width, this.height);
 
         // 标题
         context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 15, 0xFFFFFF);
@@ -154,8 +154,23 @@ public class DebugMenuScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
     }
 
-    @Override
+    /**
+     * 滚轮处理（1.20.2+ 签名，含横向滚动量）。
+     * 不加 {@code @Override}：该签名在 1.20.1 上不存在，仅作为普通方法保留以便跨版本编译。
+     */
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        return debugMenu$scroll(verticalAmount);
+    }
+
+    /**
+     * 滚轮处理（1.20.1 签名）。
+     * 不加 {@code @Override}：该签名在 1.20.2+ 上已被移除，仅作为普通方法保留以便跨版本编译。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        return debugMenu$scroll(amount);
+    }
+
+    private boolean debugMenu$scroll(double verticalAmount) {
         int maxScroll = Math.max(0, totalContentHeight - (this.height - TOP_MARGIN - BOTTOM_MARGIN));
         scrollOffset -= (int) (verticalAmount * 10);
         scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
