@@ -4,7 +4,7 @@
 
 A standalone debugging toolkit for Minecraft Fabric. It collects debug toggles, HUD overlays, and player behavior logging into one scrollable menu, and exposes an API so other mods can plug their own debug toggles into the same screen.
 
-- Minecraft: 1.20.4
+- Minecraft: 1.20.1 (default) / 1.20.4 (single source tree, target picked at build time)
 - Fabric Loader: >= 0.15.0 (requires Fabric API)
 - Java: 17
 - Environment: client + server
@@ -59,11 +59,23 @@ The registry is backed by a `CopyOnWriteArrayList`, so reads are safe across thr
 
 ## Building
 
+The default target comes from `default_mc` in `gradle.properties` (currently **1.20.1**), so plain commands just work:
+
 ```powershell
 ./gradlew build
+./gradlew runClient
 ```
 
-Artifacts land in `build/libs/`. To launch a dev client: `./gradlew runClient`.
+Switch targets with `-Pmc` (quote it in PowerShell):
+
+```powershell
+./gradlew build "-Pmc=1.20.4"
+./gradlew runClient "-Pmc=1.20.4"
+```
+
+Artifacts land in `build/libs/` with the game version in the file name, e.g. `debug-menu-mc1.20.1-1.0.0.jar`.
+
+Yarn mappings and Fabric API versions per target live in the `supportedVersions` map in `build.gradle`; adding a new target is one entry.
 
 ## License
 

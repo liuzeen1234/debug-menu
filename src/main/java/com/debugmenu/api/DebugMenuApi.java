@@ -21,6 +21,15 @@ public final class DebugMenuApi {
 
     private static final List<DebugToggleEntry> entries = new CopyOnWriteArrayList<>();
 
+    /**
+     * 数值条目注册表。
+     *
+     * <p><b>注意：</b>与布尔条目不同，这份注册表在方案 B 下<b>客户端和服务端都会填充</b>
+     * （服务端注册 setter 用于收包后执行，客户端注册 getter/setter 用于 UI）。
+     * 因此不能再假设"只有客户端碰"。这里沿用 {@link CopyOnWriteArrayList} 保证线程安全。
+     */
+    private static final List<DebugValueEntry> valueEntries = new CopyOnWriteArrayList<>();
+
     private DebugMenuApi() {}
 
     /**
@@ -52,10 +61,13 @@ public final class DebugMenuApi {
     }
 
     /**
-     * 是否有已注册的调试开关。
+     * 是否有任何已注册的条目（布尔开关或数值条目任一非空）。
+     *
+     * <p>菜单据此判断是否显示"无可控制的开关"。只要有数值条目也应视为有内容，
+     * 否则纯数值场景会误报为空。
      */
     public static boolean hasEntries() {
-        return !entries.isEmpty();
+        return !entries.isEmpty() || !valueEntries.isEmpty();
     }
 
     /**
@@ -94,5 +106,117 @@ public final class DebugMenuApi {
     public static boolean isEnabled(String key) {
         DebugToggleEntry entry = getEntry(key);
         return entry != null && entry.isEnabled();
+    }
+
+    // ==================== 数值条目 ====================
+
+    /**
+     * 注册一个调试数值条目（滑条）。
+     *
+     * <p>同一个 key 需要在客户端与服务端各注册一次，见 {@link DebugValueEntry} 的说明。
+     *
+     * @param entry 数值条目
+     */
+    public static void registerValue(DebugValueEntry entry) {
+        Objects.requireNonNull(entry, "DebugValueEntry cannot be null");
+        valueEntries.add(entry);
+    }
+
+    /**
+     * 批量注册数值条目。
+     */
+    public static void registerAllValues(Collection<DebugValueEntry> newEntries) {
+        for (DebugValueEntry entry : newEntries) {
+            registerValue(entry);
+        }
+    }
+
+    /**
+     * 获取所有已注册的数值条目（只读视图）。
+     */
+    public static List<DebugValueEntry> getValueEntries() {
+        return Collections.unmodifiableList(valueEntries);
+    }
+
+    /**
+     * 是否有已注册的数值条目。
+     */
+    public static boolean hasValueEntries() {
+        return !valueEntries.isEmpty();
+    }
+
+    /**
+     * 按 modId 分组获取所有数值条目（不过滤 side，可能含同 key 的两侧重复）。
+     *
+     * <p>一般应使用 {@link #getValueEntriesByMod(DebugValueEntry.Side)} 以按 side 过滤并去重。
+     */
+    public static Map<String, List<DebugValueEntry>> getValueEntriesByMod() {
+        Map<String, List<DebugValueEntry>> grouped = new LinkedHashMap<>();
+        for (DebugValueEntry entry : valueEntries) {
+            grouped.computeIfAbsent(entry.getModId(), k -> new ArrayList<>()).add(entry);
+        }
+        return grouped;
+    }
+
+    /**
+     * 按 modId 分组获取匹配指定 side 的数值条目，并<b>按 key 去重</b>。
+     *
+     * <p>单人环境下同一个 key 会有客户端和服务端两条 entry；此方法只保留匹配 {@code side}
+     * （或 {@link DebugValueEntry.Side#BOTH}）的条目，并对同 key 只保留先注册的一条，避免
+     * UI 重复渲染。
+     *
+     * @param side 查询侧（UI 用 {@link DebugValueEntry.Side#CLIENT}）
+     */
+    public static Map<String, List<DebugValueEntry>> getValueEntriesByMod(DebugValueEntry.Side side) {
+        Map<String, List<DebugValueEntry>> grouped = new LinkedHashMap<>();
+        Set<String> seenKeys = new HashSet<>();
+        for (DebugValueEntry entry : valueEntries) {
+            if (!entry.matchesSide(side)) {
+                continue;
+            }
+            if (!seenKeys.add(entry.getKey())) {
+                continue; // 同 key 已收录，去重
+            }
+            grouped.computeIfAbsent(entry.getModId(), k -> new ArrayList<>()).add(entry);
+        }
+        return grouped;
+    }
+
+    /**
+     * 根据 key 查找数值条目（不过滤 side，返回先注册的一条）。
+     *
+     * <p>在同 key 两端注册的场景下这可能返回错误的一侧，一般应使用
+     * {@link #getValueEntry(String, DebugValueEntry.Side)}。
+     *
+     * @param key 条目的唯一标识
+     * @return 对应条目，未找到返回 null
+     */
+    public static DebugValueEntry getValueEntry(String key) {
+        for (DebugValueEntry entry : valueEntries) {
+            if (entry.getKey().equals(key)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 根据 key 和 side 查找数值条目。
+     *
+     * <p>只返回匹配该 side（或 {@link DebugValueEntry.Side#BOTH}）的条目。网络层据此确保：
+     * C2S 收包用 {@link DebugValueEntry.Side#SERVER} 拿到服务端那条，S2C 回写用
+     * {@link DebugValueEntry.Side#CLIENT} 拿到客户端那条。
+     *
+     * @param key  条目的唯一标识
+     * @param side 查询侧
+     * @return 对应条目，未找到返回 null
+     */
+    public static DebugValueEntry getValueEntry(String key, DebugValueEntry.Side side) {
+        for (DebugValueEntry entry : valueEntries) {
+            if (entry.getKey().equals(key) && entry.matchesSide(side)) {
+                return entry;
+            }
+        }
+        return null;
     }
 }

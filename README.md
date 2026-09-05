@@ -4,7 +4,7 @@
 
 一个独立的 Minecraft Fabric 调试工具 Mod：把常用的调试开关、HUD 覆盖层和玩家行为日志集中到一个可滚动的菜单里，同时开放 API 让其他 Mod 把自己的调试开关挂进来。
 
-- Minecraft：1.20.4
+- Minecraft：1.20.1（默认）/ 1.20.4（同一份源码，构建时选择目标版本）
 - Fabric Loader：>= 0.15.0（依赖 Fabric API）
 - Java：17
 - 环境：客户端 + 服务端
@@ -59,11 +59,23 @@ DebugMenuApi.register(new DebugToggleEntry(
 
 ## 构建
 
+默认目标是 `gradle.properties` 中 `default_mc` 指定的版本（当前为 **1.20.1**），直接构建和启动开发客户端即可：
+
 ```powershell
 ./gradlew build
+./gradlew runClient
 ```
 
-产物在 `build/libs/` 下。开发环境运行：`./gradlew runClient`。
+要切到别的版本，用 `-Pmc`（PowerShell 下建议加引号）：
+
+```powershell
+./gradlew build "-Pmc=1.20.4"
+./gradlew runClient "-Pmc=1.20.4"
+```
+
+产物在 `build/libs/` 下，文件名带游戏版本，例如 `debug-menu-mc1.20.1-1.0.0.jar`。
+
+各目标版本对应的 Yarn 映射与 Fabric API 版本集中在 `build.gradle` 的 `supportedVersions` 里，新增版本只需加一条记录。
 
 ## 许可
 
