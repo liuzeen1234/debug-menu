@@ -40,6 +40,12 @@ public class DebugMenuClient implements ClientModInitializer {
     /** 测试多状态开关的本地状态（演示"语言选择"式的多状态开关） */
     private static String testLanguage = "English";
 
+    /** 测试一级开关状态（普通开关，始终可见） */
+    private static boolean testParentEnabled = false;
+
+    /** 测试二级开关状态（普通开关，仅当一级开关开启时在菜单显示） */
+    private static boolean testChildEnabled = false;
+
     @Override
     public void onInitializeClient() {
         // 加载配置
@@ -83,6 +89,29 @@ public class DebugMenuClient implements ClientModInitializer {
                     testLanguage = v;
                     DebugMenuConfig.setOptionState("test_language", v);
                 }
+        ));
+
+        // 注册测试一级开关（普通开关，始终可见）
+        testParentEnabled = DebugMenuConfig.getToggleState("test_parent", false);
+        DebugMenuApi.register(new DebugToggleEntry(
+                "debug-menu", "debug-menu:test_parent", "测试一级开关",
+                () -> testParentEnabled,
+                (enabled) -> {
+                    testParentEnabled = enabled;
+                    DebugMenuConfig.setToggleState("test_parent", enabled);
+                }
+        ));
+
+        // 注册测试二级开关（普通开关，仅当一级开关开启时显示）
+        testChildEnabled = DebugMenuConfig.getToggleState("test_child", false);
+        DebugMenuApi.register(new DebugToggleEntry(
+                "debug-menu", "debug-menu:test_child", "测试二级开关",
+                () -> testChildEnabled,
+                (enabled) -> {
+                    testChildEnabled = enabled;
+                    DebugMenuConfig.setToggleState("test_child", enabled);
+                },
+                DebugMenuApi.visibleWhenEnabled("debug-menu:test_parent")
         ));
 
         // 注册实体 NBT 响应包的客户端接收器
