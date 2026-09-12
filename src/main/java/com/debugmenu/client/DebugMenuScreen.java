@@ -13,6 +13,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,12 @@ public class DebugMenuScreen extends Screen {
 
     /** 当前可见的滑条控件，按 key 索引，供收到服务端回写时刷新。 */
     private final Map<String, DebugValueSliderWidget> visibleSliders = new java.util.HashMap<>();
+
+    /**
+     * 已折叠的 mod 分组（存 modId）。折叠后该组只显示标题、隐藏所有按钮/滑条。
+     * 仅在菜单打开期间有效，关闭后不保留。
+     */
+    private final Set<String> collapsedMods = new HashSet<>();
 
     public DebugMenuScreen() {
         super(Text.literal("调试功能菜单"));
@@ -100,10 +107,52 @@ public class DebugMenuScreen extends Screen {
     }
 
     /**
-     * 取某个 modId 下当前<b>可见</b>的布尔开关（过滤掉可见性谓词为 false 的二级开关）。
+     * {@link #forEachGroup} 的回调：接收 modId、标题所在的 y、该组是否折叠。
+     */
+    @FunctionalInterface
+    private interface GroupVisitor {
+        void visit(String modId, int headerY, boolean collapsed);
+    }
+
+    /**
+     * 按与布局完全一致的算法遍历所有<b>可见</b>分组，回调标题的 y 坐标。
      *
-     * <p>{@link #rebuildWidgets()} 和 {@link #render(DrawContext, int, int, float)} 都要用同一份
-     * 过滤结果，否则分组标题位置与滚动高度会与实际渲染错位。
+     * <p>{@link #rebuildWidgets()}、{@link #render(DrawContext, int, int, float)} 和
+     * {@link #mouseClicked(double, double, int)} 三处共用此方法，确保标题位置、按钮位置、
+     * 点击命中三者永远对齐，避免各自累加 y 时算法漂移。
+     *
+     * <p>回调发生在"标题占位之前"，即 {@code headerY} 是标题绘制的顶端。回调返回后本方法
+     * 会自动累加标题高度；若该组未折叠，再累加其内容行与组间距。
+     *
+     * @return 遍历结束后的 y（用于计算内容总高度）
+     */
+    private int forEachGroup(Map<String, List<DebugToggleEntry>> grouped,
+                             Map<String, List<DebugValueEntry>> valueGrouped,
+                             Map<String, List<DebugOptionEntry>> optionGrouped,
+                             GroupVisitor visitor) {
+        int y = TOP_MARGIN - scrollOffset;
+        for (String modId : allModIds(grouped, valueGrouped, optionGrouped)) {
+            if (!groupHasVisibleContent(grouped, valueGrouped, optionGrouped, modId)) {
+                continue;
+            }
+            boolean collapsed = collapsedMods.contains(modId);
+            visitor.visit(modId, y, collapsed);
+            y += GROUP_HEADER_HEIGHT;
+
+            if (!collapsed) {
+                int rows = visibleToggles(grouped, modId).size()
+                        + valueGrouped.getOrDefault(modId, List.of()).size()
+                        + optionGrouped.getOrDefault(modId, List.of()).size();
+                y += rows * GAP;
+                y += 6; // 分组间距
+            }
+        }
+        return y;
+    }
+
+    /**
+     * 取某个 modId 下当前<b>可见</b>的布尔开关（过滤掉可见性谓词为 false 的二级开关）。
+     * {@link #forEachGroup} 遍历时用它统计行数，与实际创建的按钮保持一致。
      */
     private List<DebugToggleEntry> visibleToggles(Map<String, List<DebugToggleEntry>> grouped, String modId) {
         List<DebugToggleEntry> all = grouped.getOrDefault(modId, List.of());
@@ -158,16 +207,15 @@ public class DebugMenuScreen extends Screen {
                 DebugMenuApi.getValueEntriesByMod(DebugValueEntry.Side.CLIENT);
         Map<String, List<DebugOptionEntry>> optionGrouped = DebugMenuApi.getOptionEntriesByMod();
         int centerX = this.width / 2 - BUTTON_WIDTH / 2;
-        int y = TOP_MARGIN - scrollOffset;
 
-        for (String modId : allModIds(grouped, valueGrouped, optionGrouped)) {
-            // 分组内全部条目都被隐藏时，连标题一起跳过
-            if (!groupHasVisibleContent(grouped, valueGrouped, optionGrouped, modId)) {
-                continue;
+        int endY = forEachGroup(grouped, valueGrouped, optionGrouped, (modId, headerY, collapsed) -> {
+            // 折叠的分组只保留标题，不创建任何按钮/滑条
+            if (collapsed) {
+                return;
             }
 
-            // Mod 分组标题占用空间
-            y += GROUP_HEADER_HEIGHT;
+            // 标题下方第一行按钮的起点
+            int y = headerY + GROUP_HEADER_HEIGHT;
 
             // 每个开关一个按钮（仅渲染当前可见的；二级开关左缩进以区分层级）
             List<DebugToggleEntry> toggles = visibleToggles(grouped, modId);
@@ -218,12 +266,9 @@ public class DebugMenuScreen extends Screen {
                 }
                 y += GAP;
             }
+        });
 
-            // 分组间距
-            y += 6;
-        }
-
-        totalContentHeight = y + scrollOffset - TOP_MARGIN;
+        totalContentHeight = endY + scrollOffset - TOP_MARGIN;
 
         // HUD 设置按钮（调试 Mod 自带功能）
         this.addDrawableChild(ButtonWidget.builder(
@@ -270,34 +315,79 @@ public class DebugMenuScreen extends Screen {
             Map<String, List<DebugValueEntry>> valueGrouped =
                     DebugMenuApi.getValueEntriesByMod(DebugValueEntry.Side.CLIENT);
             Map<String, List<DebugOptionEntry>> optionGrouped = DebugMenuApi.getOptionEntriesByMod();
-            int y = TOP_MARGIN - scrollOffset;
 
-            for (String modId : allModIds(grouped, valueGrouped, optionGrouped)) {
-                // 与 rebuildWidgets 一致：整组不可见则跳过
-                if (!groupHasVisibleContent(grouped, valueGrouped, optionGrouped, modId)) {
-                    continue;
-                }
-
-                // 绘制 mod 分组标题
-                if (y > TOP_MARGIN - 15 && y < this.height - BOTTOM_MARGIN) {
-                    String header = "── " + modId + " ──";
+            forEachGroup(grouped, valueGrouped, optionGrouped, (modId, headerY, collapsed) -> {
+                // 绘制 mod 分组标题（折叠 ▶ / 展开 ▼），内容行的跳过由 forEachGroup 统一处理
+                if (headerY > TOP_MARGIN - 15 && headerY < this.height - BOTTOM_MARGIN) {
+                    String arrow = collapsed ? "\u25B6" : "\u25BC";
+                    String header = arrow + " " + modId;
                     context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(header),
-                            this.width / 2, y + 3, 0xFFFF55);
+                            this.width / 2, headerY + 3, 0xFFFF55);
                 }
-                y += GROUP_HEADER_HEIGHT;
-
-                // 跳过按钮/滑条区域（布尔 + 数值）；布尔只计可见条目，与 rebuildWidgets 保持一致
-                int rows = visibleToggles(grouped, modId).size()
-                        + valueGrouped.getOrDefault(modId, List.of()).size()
-                        + optionGrouped.getOrDefault(modId, List.of()).size();
-                y += rows * GAP;
-
-                // 分组间距
-                y += 6;
-            }
+            });
         }
 
         super.render(context, mouseX, mouseY, delta);
+    }
+
+    /**
+     * 鼠标点击：检测是否单击了某个 mod 分组标题，是则折叠/展开该组。
+     *
+     * <p>标题不是 widget，父类不会派发点击，故在此自行命中测试：命中范围为标题<b>文字本身</b>
+     * （居中文本的矩形），而非整行。未命中标题时交回父类处理，保证按钮/滑条点击不受影响。
+     */
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && DebugMenuApi.hasEntries()) {
+            String hit = headerAt(mouseX, mouseY);
+            if (hit != null) {
+                if (!collapsedMods.add(hit)) {
+                    collapsedMods.remove(hit); // 已折叠 → 展开
+                }
+                // 折叠状态变化后重新夹紧滚动偏移，避免内容变短后停在空白处
+                rebuildWidgets();
+                clampScroll();
+                rebuildWidgets();
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /**
+     * 命中测试：返回鼠标位置落在哪个 mod 标题<b>文字矩形</b>上，无则返回 null。
+     * 使用与布局一致的 {@link #forEachGroup} 遍历，保证与绘制位置对齐。
+     */
+    private String headerAt(double mouseX, double mouseY) {
+        Map<String, List<DebugToggleEntry>> grouped = DebugMenuApi.getEntriesByMod();
+        Map<String, List<DebugValueEntry>> valueGrouped =
+                DebugMenuApi.getValueEntriesByMod(DebugValueEntry.Side.CLIENT);
+        Map<String, List<DebugOptionEntry>> optionGrouped = DebugMenuApi.getOptionEntriesByMod();
+
+        String[] found = new String[1];
+        forEachGroup(grouped, valueGrouped, optionGrouped, (modId, headerY, collapsed) -> {
+            if (found[0] != null) {
+                return;
+            }
+            // 文本与 render 保持一致：箭头 + 空格 + modId，居中绘制
+            String arrow = collapsed ? "\u25B6" : "\u25BC";
+            String header = arrow + " " + modId;
+            int textWidth = this.textRenderer.getWidth(header);
+            int left = this.width / 2 - textWidth / 2;
+            int right = this.width / 2 + textWidth / 2;
+            int top = headerY + 3;
+            int bottom = top + this.textRenderer.fontHeight;
+            if (mouseX >= left && mouseX <= right && mouseY >= top && mouseY <= bottom) {
+                found[0] = modId;
+            }
+        });
+        return found[0];
+    }
+
+    /** 将 scrollOffset 夹紧到合法区间（内容高度变化后调用）。 */
+    private void clampScroll() {
+        int maxScroll = Math.max(0, totalContentHeight - (this.height - TOP_MARGIN - BOTTOM_MARGIN));
+        scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
     }
 
     /**
