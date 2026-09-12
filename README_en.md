@@ -4,7 +4,7 @@
 
 A standalone debugging toolkit for Minecraft Fabric. It collects debug toggles, HUD overlays, and player behavior logging into one scrollable menu, and exposes an API so other mods can plug their own debug toggles into the same screen.
 
-- Minecraft: 1.20.1 (default) / 1.20.4 (single source tree, target picked at build time)
+- Minecraft: 1.20.4 (default) / 1.20.1 (single source tree, target picked at build time)
 - Fabric Loader: >= 0.15.0 (requires Fabric API)
 - Java: 17
 - Environment: client + server
@@ -57,6 +57,50 @@ Other available methods:
 
 The registry is backed by a `CopyOnWriteArrayList`, so reads are safe across threads.
 
+### Numeric entry (slider, with server sync)
+
+When you need an integer value constrained by min/max/step, register a `DebugValueEntry` and the menu renders it as a slider:
+
+```java
+DebugMenuApi.registerValue(new DebugValueEntry(
+    "my-mod",                // owning mod ID
+    "my-mod:spawn_rate",     // unique key
+    "Spawn Rate",            // display name
+    0, 100,                  // min / max (inclusive)
+    () -> spawnRate,         // getter
+    v -> { spawnRate = v; saveConfig(); }   // setter (value is clamped to [min, max] internally)
+));
+```
+
+Key conventions:
+
+- **Register on both sides**: the same `key` must be registered **once on the client and once on the server**. The client entry drives the UI (local slider display, sends packets); the server entry runs on the server main thread when a sync packet arrives. The two are matched by the shared `key`.
+- **Side tagging**: each entry is tagged with `DebugValueEntry.Side` (`CLIENT` / `SERVER` / `BOTH`). In single-player the client and integrated server share one JVM, so side filtering avoids double-rendering the UI and updating the wrong object on write-back. Use `BOTH` only when both getters/setters point at the **same state**.
+- **Permission**: before applying a client value, the server runs a permission check that defaults to requiring permission level `>= 2`. Override it by passing a custom `BiPredicate<ServerPlayerEntity, Integer>` to the full constructor.
+- **Options**: the full constructor supports a custom step (`step > 0`) and a unit suffix (e.g. `"blocks"`, `"%"`).
+- Other methods: `registerAllValues(...)` to bulk register, `getValueEntry(key)` / `getValueEntry(key, side)` to query, `getValueEntriesByMod(side)` to group by mod (filtered by side and de-duplicated).
+
+### Conditional / nested toggles
+
+A toggle can be shown only when a condition holds, letting you build a "parent toggle → child option" hierarchy. Pass a visibility predicate to `DebugToggleEntry`:
+
+```java
+// Shown only while the parent boolean toggle my-mod:feature is on
+DebugMenuApi.register(new DebugToggleEntry(
+    "my-mod", "my-mod:detail", "Detail Sub-option",
+    () -> detailOn, v -> { detailOn = v; save(); },
+    DebugMenuApi.visibleWhenEnabled("my-mod:feature")));
+
+// Shown only while the parent multi-state switch my-mod:mode is "Advanced" or "Expert"
+DebugMenuApi.register(new DebugToggleEntry(
+    "my-mod", "my-mod:expert_opt", "Expert Option",
+    () -> expertOn, v -> { expertOn = v; save(); },
+    DebugMenuApi.visibleWhenOption("my-mod:mode", "Advanced", "Expert")));
+```
+
+- `visibleWhenEnabled(parentKey)`: visible while the parent boolean toggle is on; a missing parent key counts as off.
+- `visibleWhenOption(parentKey, states...)`: visible while the parent multi-state switch's current state matches one of `states`; a missing key or non-matching state hides it.
+
 ### Multi-state switch (custom state names)
 
 Besides on/off boolean toggles, you can register a switch with **multiple states whose names are fully custom** (e.g. a language selector). The menu renders it as a button that cycles through the states on click:
@@ -80,7 +124,7 @@ Notes:
 
 ## Building
 
-The default target comes from `default_mc` in `gradle.properties` (currently **1.20.1**), so plain commands just work:
+The default target comes from `default_mc` in `gradle.properties` (currently **1.20.4**), so plain commands just work:
 
 ```powershell
 ./gradlew build
@@ -90,11 +134,13 @@ The default target comes from `default_mc` in `gradle.properties` (currently **1
 Switch targets with `-Pmc` (quote it in PowerShell):
 
 ```powershell
-./gradlew build "-Pmc=1.20.4"
-./gradlew runClient "-Pmc=1.20.4"
+./gradlew build "-Pmc=1.20.1"
+./gradlew runClient "-Pmc=1.20.1"
 ```
 
-Artifacts land in `build/libs/` with the game version in the file name, e.g. `debug-menu-mc1.20.1-1.0.0.jar`.
+Artifacts land in `build/libs/` with the game version in the file name, e.g. `debug-menu-mc1.20.4-1.0.0.jar`.
+
+> Compilation is pinned to JDK 17 (see `org.gradle.java.home` in `gradle.properties` and the toolchain in `build.gradle`). If the JDK 17 path differs on another machine, edit that one line in `gradle.properties`.
 
 Yarn mappings and Fabric API versions per target live in the `supportedVersions` map in `build.gradle`; adding a new target is one entry.
 
