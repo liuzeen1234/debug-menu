@@ -74,8 +74,12 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    // 强制用 JDK 17 执行编译：机器默认 JDK 可能是 21/25，toolchain 会让 Gradle
+    // 自动定位一个已安装的 17（或按配置下载），找不到就直接报错，避免用错版本。
+    // toolchain 已隐含 source/target = 17，无需再单独设置 sourceCompatibility。
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 
     withSourcesJar()
 }
