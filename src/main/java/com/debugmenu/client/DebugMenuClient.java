@@ -91,11 +91,11 @@ public class DebugMenuClient implements ClientModInitializer {
         // 注册数值同步回写包的客户端接收器（方案 B）
         DebugValueSyncS2CPacket.registerClientReceiver();
 
-        // 注册按键绑定: 打开调试功能菜单（默认无绑定）
+        // 注册按键绑定: 打开调试功能菜单（默认按键 M）
         openDebugMenuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.debug-menu.open_debug_menu",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,
+                GLFW.GLFW_KEY_M,
                 "category.debug-menu.general"
         ));
 

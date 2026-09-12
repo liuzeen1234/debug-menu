@@ -42,12 +42,12 @@ public class DebugMenuConfig {
         public Map<String, String> optionStates = new HashMap<>();
 
         // === 实体血量 HUD ===
-        public boolean entityHealthHudEnabled = false;
+        public boolean entityHealthHudEnabled = true;
         public double entityHealthHudReachDistance = 128.0;
         public boolean entityHealthHudDetailedInfo = false;
 
         // === 手持物品 HUD ===
-        public boolean itemHudEnabled = false;
+        public boolean itemHudEnabled = true;
         public boolean advancedItemHudEnabled = false;
     }
 
