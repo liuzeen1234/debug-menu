@@ -1,6 +1,7 @@
 package com.debugmenu.client;
 
 import com.debugmenu.api.DebugMenuApi;
+import com.debugmenu.api.DebugOptionEntry;
 import com.debugmenu.api.DebugToggleEntry;
 import com.debugmenu.api.DebugValueEntry;
 import com.debugmenu.network.DebugValueRequestC2SPacket;
@@ -86,10 +87,12 @@ public class DebugMenuScreen extends Screen {
      * 合并布尔与数值条目的 modId，保持插入顺序（布尔在前）。
      */
     private Set<String> allModIds(Map<String, List<DebugToggleEntry>> toggles,
-                                  Map<String, List<DebugValueEntry>> values) {
+                                  Map<String, List<DebugValueEntry>> values,
+                                  Map<String, List<DebugOptionEntry>> options) {
         Set<String> ids = new LinkedHashSet<>();
         ids.addAll(toggles.keySet());
         ids.addAll(values.keySet());
+        ids.addAll(options.keySet());
         return ids;
     }
 
@@ -118,10 +121,11 @@ public class DebugMenuScreen extends Screen {
         // 只取客户端（含 BOTH）侧条目并按 key 去重，避免单人环境下同 key 两侧重复渲染。
         Map<String, List<DebugValueEntry>> valueGrouped =
                 DebugMenuApi.getValueEntriesByMod(DebugValueEntry.Side.CLIENT);
+        Map<String, List<DebugOptionEntry>> optionGrouped = DebugMenuApi.getOptionEntriesByMod();
         int centerX = this.width / 2 - BUTTON_WIDTH / 2;
         int y = TOP_MARGIN - scrollOffset;
 
-        for (String modId : allModIds(grouped, valueGrouped)) {
+        for (String modId : allModIds(grouped, valueGrouped, optionGrouped)) {
             // Mod 分组标题占用空间
             y += GROUP_HEADER_HEIGHT;
 
@@ -155,6 +159,23 @@ public class DebugMenuScreen extends Screen {
                 y += GAP;
             }
 
+            // 每个多状态开关一个循环按钮
+            List<DebugOptionEntry> options = optionGrouped.getOrDefault(modId, List.of());
+            for (DebugOptionEntry entry : options) {
+                if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
+                    final DebugOptionEntry finalEntry = entry;
+                    ButtonWidget btn = ButtonWidget.builder(
+                            getOptionText(entry),
+                            button -> {
+                                finalEntry.cycle();
+                                button.setMessage(getOptionText(finalEntry));
+                            }
+                    ).dimensions(centerX, y, BUTTON_WIDTH, BUTTON_HEIGHT).build();
+                    this.addDrawableChild(btn);
+                }
+                y += GAP;
+            }
+
             // 分组间距
             y += 6;
         }
@@ -179,6 +200,14 @@ public class DebugMenuScreen extends Screen {
         return Text.literal(entry.getDisplayName() + ": " + status);
     }
 
+    private Text getOptionText(DebugOptionEntry entry) {
+        // 显示 "名称: §e当前状态 (下标+1/总数)"，黄色高亮当前状态名
+        int idx = entry.getSelectedIndex() + 1;
+        int total = entry.size();
+        return Text.literal(entry.getDisplayName() + ": §e" + entry.getSelected()
+                + " §7(" + idx + "/" + total + ")");
+    }
+
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         ScreenCompat.renderMenuBackground(context, this.width, this.height);
@@ -197,9 +226,10 @@ public class DebugMenuScreen extends Screen {
             Map<String, List<DebugToggleEntry>> grouped = DebugMenuApi.getEntriesByMod();
             Map<String, List<DebugValueEntry>> valueGrouped =
                     DebugMenuApi.getValueEntriesByMod(DebugValueEntry.Side.CLIENT);
+            Map<String, List<DebugOptionEntry>> optionGrouped = DebugMenuApi.getOptionEntriesByMod();
             int y = TOP_MARGIN - scrollOffset;
 
-            for (String modId : allModIds(grouped, valueGrouped)) {
+            for (String modId : allModIds(grouped, valueGrouped, optionGrouped)) {
                 // 绘制 mod 分组标题
                 if (y > TOP_MARGIN - 15 && y < this.height - BOTTOM_MARGIN) {
                     String header = "── " + modId + " ──";
@@ -210,7 +240,8 @@ public class DebugMenuScreen extends Screen {
 
                 // 跳过按钮/滑条区域（布尔 + 数值）
                 int rows = grouped.getOrDefault(modId, List.of()).size()
-                        + valueGrouped.getOrDefault(modId, List.of()).size();
+                        + valueGrouped.getOrDefault(modId, List.of()).size()
+                        + optionGrouped.getOrDefault(modId, List.of()).size();
                 y += rows * GAP;
 
                 // 分组间距

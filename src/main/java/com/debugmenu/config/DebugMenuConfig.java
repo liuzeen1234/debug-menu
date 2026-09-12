@@ -38,6 +38,9 @@ public class DebugMenuConfig {
         /** 各数值条目状态：key -> value */
         public Map<String, Integer> valueStates = new HashMap<>();
 
+        /** 各多状态开关状态：key -> 当前状态名 */
+        public Map<String, String> optionStates = new HashMap<>();
+
         // === 实体血量 HUD ===
         public boolean entityHealthHudEnabled = false;
         public double entityHealthHudReachDistance = 128.0;
@@ -115,6 +118,31 @@ public class DebugMenuConfig {
             data.valueStates = new HashMap<>();
         }
         data.valueStates.put(key, value);
+        save();
+    }
+
+    // ==================== 多状态开关状态存取 ====================
+
+    /**
+     * 获取某个多状态开关的持久化状态名。
+     * 如果从未设置过，返回 defaultValue。
+     */
+    public static String getOptionState(String key, String defaultValue) {
+        // 防御空 map（旧配置文件可能没有该字段）
+        if (data.optionStates == null) {
+            data.optionStates = new HashMap<>();
+        }
+        return data.optionStates.getOrDefault(key, defaultValue);
+    }
+
+    /**
+     * 设置某个多状态开关的持久化状态名。
+     */
+    public static void setOptionState(String key, String optionName) {
+        if (data.optionStates == null) {
+            data.optionStates = new HashMap<>();
+        }
+        data.optionStates.put(key, optionName);
         save();
     }
 

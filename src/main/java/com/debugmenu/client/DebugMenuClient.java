@@ -1,6 +1,7 @@
 package com.debugmenu.client;
 
 import com.debugmenu.api.DebugMenuApi;
+import com.debugmenu.api.DebugOptionEntry;
 import com.debugmenu.api.DebugToggleEntry;
 import com.debugmenu.api.DebugValueEntry;
 import com.debugmenu.config.DebugMenuConfig;
@@ -36,6 +37,9 @@ public class DebugMenuClient implements ClientModInitializer {
     /** 测试滑条的本地值（客户端 UI 演示用，验证方案 B 数值通道） */
     private static int testSliderValue = 10;
 
+    /** 测试多状态开关的本地状态（演示"语言选择"式的多状态开关） */
+    private static String testLanguage = "English";
+
     @Override
     public void onInitializeClient() {
         // 加载配置
@@ -66,6 +70,19 @@ public class DebugMenuClient implements ClientModInitializer {
                     DebugMenuConfig.setValueState("test_slider", v);
                 },
                 null, null, DebugValueEntry.Side.CLIENT
+        ));
+
+        // 注册一个测试多状态开关（客户端 UI 侧），演示"语言选择"式的自定义多状态开关。
+        // 状态名完全由注册方自定义，点击按钮在各状态之间循环切换。
+        testLanguage = DebugMenuConfig.getOptionState("test_language", "English");
+        DebugMenuApi.registerOption(new DebugOptionEntry(
+                "debug-menu", "debug-menu:test_language", "语言",
+                java.util.List.of("English", "简体中文", "日本語"),
+                () -> testLanguage,
+                (v) -> {
+                    testLanguage = v;
+                    DebugMenuConfig.setOptionState("test_language", v);
+                }
         ));
 
         // 注册实体 NBT 响应包的客户端接收器

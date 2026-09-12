@@ -14,6 +14,19 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * ));
  * }</pre>
  *
+ * <p>除布尔开关外，还支持：
+ * <ul>
+ *   <li>{@link DebugValueEntry} 数值条目（滑条，支持服务端同步）—— {@link #registerValue}</li>
+ *   <li>{@link DebugOptionEntry} 多状态开关（状态名可自定义，如语言选择）—— {@link #registerOption}</li>
+ * </ul>
+ * <pre>{@code
+ * DebugMenuApi.registerOption(new DebugOptionEntry(
+ *     "my-mod", "my-mod:language", "语言",
+ *     java.util.List.of("English", "简体中文", "日本語"),
+ *     () -> currentLanguage, (v) -> { currentLanguage = v; saveConfig(); }
+ * ));
+ * }</pre>
+ *
  * <p>调试菜单 Mod 会自动读取所有注册的条目并生成 UI。
  * 如果没有任何注册，菜单将显示"无可控制的开关"。
  */
@@ -29,6 +42,14 @@ public final class DebugMenuApi {
      * 因此不能再假设"只有客户端碰"。这里沿用 {@link CopyOnWriteArrayList} 保证线程安全。
      */
     private static final List<DebugValueEntry> valueEntries = new CopyOnWriteArrayList<>();
+
+    /**
+     * 多状态开关条目注册表。
+     *
+     * <p>与布尔开关一样是纯客户端概念（状态只在客户端切换）。沿用
+     * {@link CopyOnWriteArrayList} 保证线程安全。
+     */
+    private static final List<DebugOptionEntry> optionEntries = new CopyOnWriteArrayList<>();
 
     private DebugMenuApi() {}
 
@@ -67,7 +88,7 @@ public final class DebugMenuApi {
      * 否则纯数值场景会误报为空。
      */
     public static boolean hasEntries() {
-        return !entries.isEmpty() || !valueEntries.isEmpty();
+        return !entries.isEmpty() || !valueEntries.isEmpty() || !optionEntries.isEmpty();
     }
 
     /**
@@ -218,5 +239,78 @@ public final class DebugMenuApi {
             }
         }
         return null;
+    }
+
+    // ==================== 多状态开关条目 ====================
+
+    /**
+     * 注册一个多状态开关条目（状态名由注册方自定义，如语言选择）。
+     *
+     * @param entry 多状态开关条目
+     */
+    public static void registerOption(DebugOptionEntry entry) {
+        Objects.requireNonNull(entry, "DebugOptionEntry cannot be null");
+        optionEntries.add(entry);
+    }
+
+    /**
+     * 批量注册多状态开关条目。
+     */
+    public static void registerAllOptions(Collection<DebugOptionEntry> newEntries) {
+        for (DebugOptionEntry entry : newEntries) {
+            registerOption(entry);
+        }
+    }
+
+    /**
+     * 获取所有已注册的多状态开关条目（只读视图）。
+     */
+    public static List<DebugOptionEntry> getOptionEntries() {
+        return Collections.unmodifiableList(optionEntries);
+    }
+
+    /**
+     * 是否有已注册的多状态开关条目。
+     */
+    public static boolean hasOptionEntries() {
+        return !optionEntries.isEmpty();
+    }
+
+    /**
+     * 按 modId 分组获取所有多状态开关条目。
+     */
+    public static Map<String, List<DebugOptionEntry>> getOptionEntriesByMod() {
+        Map<String, List<DebugOptionEntry>> grouped = new LinkedHashMap<>();
+        for (DebugOptionEntry entry : optionEntries) {
+            grouped.computeIfAbsent(entry.getModId(), k -> new ArrayList<>()).add(entry);
+        }
+        return grouped;
+    }
+
+    /**
+     * 根据 key 查找多状态开关条目。
+     *
+     * @param key 条目的唯一标识
+     * @return 对应条目，未找到返回 null
+     */
+    public static DebugOptionEntry getOptionEntry(String key) {
+        for (DebugOptionEntry entry : optionEntries) {
+            if (entry.getKey().equals(key)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 快速查询某个多状态开关的当前状态名（便捷方法）。
+     * 如果 key 不存在，返回 null。
+     *
+     * @param key 条目的唯一标识
+     * @return 当前状态名，未找到返回 null
+     */
+    public static String getSelectedOption(String key) {
+        DebugOptionEntry entry = getOptionEntry(key);
+        return entry != null ? entry.getSelected() : null;
     }
 }

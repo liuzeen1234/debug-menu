@@ -57,6 +57,27 @@ Other available methods:
 
 The registry is backed by a `CopyOnWriteArrayList`, so reads are safe across threads.
 
+### Multi-state switch (custom state names)
+
+Besides on/off boolean toggles, you can register a switch with **multiple states whose names are fully custom** (e.g. a language selector). The menu renders it as a button that cycles through the states on click:
+
+```java
+DebugMenuApi.registerOption(new DebugOptionEntry(
+    "my-mod",                              // owning mod ID (used for grouping)
+    "my-mod:language",                     // unique key
+    "Language",                            // display name
+    java.util.List.of("English", "简体中文", "日本語"),  // state names (order = cycle order)
+    () -> currentLanguage,                 // getter: return the current state name
+    v -> { currentLanguage = v; saveConfig(); }        // setter: store the new state name
+));
+```
+
+Notes:
+
+- State is identified by **name (String)**. The `getter` should return one of the listed states; if it returns an invalid name (or `null`), the menu falls back to the first state instead of crashing.
+- A multi-state switch is a **client-side** concept (like boolean toggles): state changes only on the client, with no server sync.
+- Other methods: `registerAllOptions(...)` to bulk register, `getSelectedOption(String key)` to query the current state name, and `getOptionEntries()` / `getOptionEntriesByMod()` / `getOptionEntry(key)` to read registered entries.
+
 ## Building
 
 The default target comes from `default_mc` in `gradle.properties` (currently **1.20.1**), so plain commands just work:

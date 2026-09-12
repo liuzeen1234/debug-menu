@@ -57,6 +57,27 @@ DebugMenuApi.register(new DebugToggleEntry(
 
 注册表基于 `CopyOnWriteArrayList`，可安全地跨线程读取。
 
+### 多状态开关（状态名自定义）
+
+除了开/关两态的布尔开关，还可以注册**有多个状态、状态名完全自定义**的开关（例如语言选择）。菜单会把它渲染成一个按钮，点击时在各状态之间循环切换：
+
+```java
+DebugMenuApi.registerOption(new DebugOptionEntry(
+    "my-mod",                              // 所属 Mod ID（用于分组）
+    "my-mod:language",                     // 唯一标识
+    "语言",                                 // 菜单显示名
+    java.util.List.of("English", "简体中文", "日本語"),  // 状态名列表（顺序即循环顺序）
+    () -> currentLanguage,                 // getter：返回当前状态名
+    v -> { currentLanguage = v; saveConfig(); }        // setter：写入新状态名
+));
+```
+
+说明：
+
+- 状态以**名称（String）**为准，`getter` 应返回状态列表中的一个；若返回无效名称（或 `null`），菜单会退回到第一个状态，不会崩溃。
+- 多状态开关是**纯客户端**概念（与布尔开关一致），状态只在客户端切换，不涉及服务端同步。
+- 其他方法：`registerAllOptions(...)` 批量注册、`getSelectedOption(String key)` 查询当前状态名、`getOptionEntries()` / `getOptionEntriesByMod()` / `getOptionEntry(key)` 读取已注册条目。
+
 ## 构建
 
 默认目标是 `gradle.properties` 中 `default_mc` 指定的版本（当前为 **1.20.1**），直接构建和启动开发客户端即可：
