@@ -39,9 +39,11 @@ public class DebugOptionEntry {
     private final List<String> options;
     private final Supplier<String> getter;
     private final Consumer<String> setter;
+    /** 可见性谓词；为 {@code null} 表示始终可见。 */
+    private final Supplier<Boolean> visibleWhen;
 
     /**
-     * 创建多状态开关条目。
+     * 创建多状态开关条目（始终可见）。
      *
      * @param modId       所属 Mod 的 ID
      * @param key         唯一标识键（建议格式 "modId:feature_name"）
@@ -53,6 +55,30 @@ public class DebugOptionEntry {
     public DebugOptionEntry(String modId, String key, String displayName,
                             List<String> options,
                             Supplier<String> getter, Consumer<String> setter) {
+        this(modId, key, displayName, options, getter, setter, null);
+    }
+
+    /**
+     * 创建多状态开关条目，并指定可见性谓词（二级/条件显示的多状态开关）。
+     *
+     * <p>传入 {@code visibleWhen} 后，此条目仅在谓词返回 {@code true} 时才出现在菜单里。
+     * 最常见的场景是"某个一级开关开启后才显示该多状态选项"，可配合
+     * {@link DebugMenuApi#visibleWhenEnabled(String)} /
+     * {@link DebugMenuApi#visibleWhenOption(String, String...)} 直接得到谓词。
+     * 可见性在每次菜单重建时实时求值；谓词只影响<b>是否显示</b>，不影响 {@code getter/setter}。
+     *
+     * @param modId       所属 Mod 的 ID
+     * @param key         唯一标识键（建议格式 "modId:feature_name"）
+     * @param displayName 菜单中显示的名称
+     * @param options     状态名列表（顺序即循环顺序，不能为空、不能含 null）
+     * @param getter      获取当前状态名（应返回 options 中的一个）
+     * @param setter      设置新状态名
+     * @param visibleWhen 可见性谓词；返回 {@code false} 时不显示。传 {@code null} 等同于始终可见
+     */
+    public DebugOptionEntry(String modId, String key, String displayName,
+                            List<String> options,
+                            Supplier<String> getter, Consumer<String> setter,
+                            Supplier<Boolean> visibleWhen) {
         Objects.requireNonNull(options, "options cannot be null");
         Objects.requireNonNull(getter, "getter cannot be null");
         Objects.requireNonNull(setter, "setter cannot be null");
@@ -72,6 +98,7 @@ public class DebugOptionEntry {
         this.options = Collections.unmodifiableList(copy);
         this.getter = getter;
         this.setter = setter;
+        this.visibleWhen = visibleWhen;
     }
 
     public String getModId() {
@@ -153,5 +180,24 @@ public class DebugOptionEntry {
         int size = options.size();
         int prev = (getSelectedIndex() - 1 + size) % size;
         setter.accept(options.get(prev));
+    }
+
+    /**
+     * 是否为二级（条件显示）多状态开关，即注册时提供了可见性谓词。
+     *
+     * <p>菜单可据此对二级条目做视觉区分（如缩进）。
+     */
+    public boolean isSecondary() {
+        return visibleWhen != null;
+    }
+
+    /**
+     * 当前是否应在菜单中显示。
+     *
+     * <p>未提供可见性谓词时恒为 {@code true}；否则实时求值该谓词，
+     * 谓词返回 {@code null} 视为不可见。
+     */
+    public boolean isVisible() {
+        return visibleWhen == null || Boolean.TRUE.equals(visibleWhen.get());
     }
 }

@@ -142,7 +142,7 @@ public class DebugMenuScreen extends Screen {
             if (!collapsed) {
                 int rows = visibleToggles(grouped, modId).size()
                         + valueGrouped.getOrDefault(modId, List.of()).size()
-                        + optionGrouped.getOrDefault(modId, List.of()).size();
+                        + visibleOptions(optionGrouped, modId).size();
                 y += rows * GAP;
                 y += 6; // 分组间距
             }
@@ -166,6 +166,22 @@ public class DebugMenuScreen extends Screen {
     }
 
     /**
+     * 取某个 modId 下当前<b>可见</b>的多状态开关（过滤掉可见性谓词为 false 的二级选项）。
+     * 与 {@link #visibleToggles} 同理，供 {@link #forEachGroup} 统计行数与 {@link #rebuildWidgets}
+     * 创建按钮时共用，保证行数与实际按钮一致。
+     */
+    private List<DebugOptionEntry> visibleOptions(Map<String, List<DebugOptionEntry>> grouped, String modId) {
+        List<DebugOptionEntry> all = grouped.getOrDefault(modId, List.of());
+        List<DebugOptionEntry> result = new ArrayList<>(all.size());
+        for (DebugOptionEntry entry : all) {
+            if (entry.isVisible()) {
+                result.add(entry);
+            }
+        }
+        return result;
+    }
+
+    /**
      * 该 modId 分组当前是否有任何可见内容（可见布尔开关 / 数值条目 / 多状态开关）。
      *
      * <p>若某分组下的开关全是被隐藏的二级开关且无其他条目，则整个分组（含标题）都不显示，
@@ -177,7 +193,7 @@ public class DebugMenuScreen extends Screen {
                                            String modId) {
         return !visibleToggles(grouped, modId).isEmpty()
                 || !valueGrouped.getOrDefault(modId, List.of()).isEmpty()
-                || !optionGrouped.getOrDefault(modId, List.of()).isEmpty();
+                || !visibleOptions(optionGrouped, modId).isEmpty();
     }
 
     private void rebuildWidgets() {
@@ -250,18 +266,21 @@ public class DebugMenuScreen extends Screen {
                 y += GAP;
             }
 
-            // 每个多状态开关一个循环按钮
-            List<DebugOptionEntry> options = optionGrouped.getOrDefault(modId, List.of());
+            // 每个多状态开关一个循环按钮（仅渲染当前可见的；二级选项左缩进以区分层级）
+            List<DebugOptionEntry> options = visibleOptions(optionGrouped, modId);
             for (DebugOptionEntry entry : options) {
                 if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
                     final DebugOptionEntry finalEntry = entry;
+                    int indent = entry.isSecondary() ? SECONDARY_INDENT : 0;
                     ButtonWidget btn = ButtonWidget.builder(
                             getOptionText(entry),
                             button -> {
                                 finalEntry.cycle();
                                 button.setMessage(getOptionText(finalEntry));
+                                // 与二级 toggle 一致：切换后重建，联动更深层条目的可见性
+                                rebuildWidgets();
                             }
-                    ).dimensions(centerX, y, BUTTON_WIDTH, BUTTON_HEIGHT).build();
+                    ).dimensions(centerX + indent, y, BUTTON_WIDTH - indent, BUTTON_HEIGHT).build();
                     this.addDrawableChild(btn);
                 }
                 y += GAP;
