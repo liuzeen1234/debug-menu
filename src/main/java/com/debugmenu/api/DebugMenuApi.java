@@ -313,4 +313,62 @@ public final class DebugMenuApi {
         DebugOptionEntry entry = getOptionEntry(key);
         return entry != null ? entry.getSelected() : null;
     }
+
+    // ==================== 可见性谓词（二级/条件显示开关） ====================
+
+    /**
+     * 构造一个"父布尔开关开启时才显示"的可见性谓词。
+     *
+     * <p>用于注册二级开关：只有当 {@code parentKey} 指向的布尔开关处于开启状态时，
+     * 该二级开关才在菜单中显示。若 {@code parentKey} 不存在则视为未开启（不显示）。
+     *
+     * <pre>{@code
+     * DebugMenuApi.register(new DebugToggleEntry(
+     *     "my-mod", "my-mod:detail", "细节子选项",
+     *     () -> detailOn, (v) -> { detailOn = v; save(); },
+     *     DebugMenuApi.visibleWhenEnabled("my-mod:feature")));
+     * }</pre>
+     *
+     * @param parentKey 父布尔开关的 key
+     * @return 可传给 {@link DebugToggleEntry} 的可见性谓词
+     */
+    public static java.util.function.Supplier<Boolean> visibleWhenEnabled(String parentKey) {
+        Objects.requireNonNull(parentKey, "parentKey cannot be null");
+        return () -> isEnabled(parentKey);
+    }
+
+    /**
+     * 构造一个"父多状态开关处于指定状态之一时才显示"的可见性谓词。
+     *
+     * <p>用于让二级开关依赖某个 {@link DebugOptionEntry} 的当前状态：当父开关的当前状态名
+     * 匹配 {@code states} 中任意一个时显示。若 {@code parentKey} 不存在或状态不匹配则不显示。
+     *
+     * <pre>{@code
+     * DebugMenuApi.register(new DebugToggleEntry(
+     *     "my-mod", "my-mod:expert_opt", "专家选项",
+     *     () -> expertOn, (v) -> { expertOn = v; save(); },
+     *     DebugMenuApi.visibleWhenOption("my-mod:mode", "高级", "专家")));
+     * }</pre>
+     *
+     * @param parentKey 父多状态开关的 key
+     * @param states    触发显示的状态名（一个或多个）
+     * @return 可传给 {@link DebugToggleEntry} 的可见性谓词
+     */
+    public static java.util.function.Supplier<Boolean> visibleWhenOption(String parentKey, String... states) {
+        Objects.requireNonNull(parentKey, "parentKey cannot be null");
+        Objects.requireNonNull(states, "states cannot be null");
+        final String[] wanted = states.clone();
+        return () -> {
+            String current = getSelectedOption(parentKey);
+            if (current == null) {
+                return false;
+            }
+            for (String s : wanted) {
+                if (current.equals(s)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
 }

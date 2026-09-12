@@ -12,6 +12,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,8 @@ public class DebugMenuScreen extends Screen {
     private static final int GAP = 22;
     /** 按钮宽度 */
     private static final int BUTTON_WIDTH = 260;
+    /** 二级（条件显示）开关的左缩进像素，用于视觉区分层级 */
+    private static final int SECONDARY_INDENT = 16;
     /** Mod 分组标题高度 */
     private static final int GROUP_HEADER_HEIGHT = 16;
     /** 顶部边距 */
@@ -96,6 +99,38 @@ public class DebugMenuScreen extends Screen {
         return ids;
     }
 
+    /**
+     * 取某个 modId 下当前<b>可见</b>的布尔开关（过滤掉可见性谓词为 false 的二级开关）。
+     *
+     * <p>{@link #rebuildWidgets()} 和 {@link #render(DrawContext, int, int, float)} 都要用同一份
+     * 过滤结果，否则分组标题位置与滚动高度会与实际渲染错位。
+     */
+    private List<DebugToggleEntry> visibleToggles(Map<String, List<DebugToggleEntry>> grouped, String modId) {
+        List<DebugToggleEntry> all = grouped.getOrDefault(modId, List.of());
+        List<DebugToggleEntry> result = new ArrayList<>(all.size());
+        for (DebugToggleEntry entry : all) {
+            if (entry.isVisible()) {
+                result.add(entry);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 该 modId 分组当前是否有任何可见内容（可见布尔开关 / 数值条目 / 多状态开关）。
+     *
+     * <p>若某分组下的开关全是被隐藏的二级开关且无其他条目，则整个分组（含标题）都不显示，
+     * 避免出现空标题。
+     */
+    private boolean groupHasVisibleContent(Map<String, List<DebugToggleEntry>> grouped,
+                                           Map<String, List<DebugValueEntry>> valueGrouped,
+                                           Map<String, List<DebugOptionEntry>> optionGrouped,
+                                           String modId) {
+        return !visibleToggles(grouped, modId).isEmpty()
+                || !valueGrouped.getOrDefault(modId, List.of()).isEmpty()
+                || !optionGrouped.getOrDefault(modId, List.of()).isEmpty();
+    }
+
     private void rebuildWidgets() {
         this.clearChildren();
 
@@ -126,22 +161,30 @@ public class DebugMenuScreen extends Screen {
         int y = TOP_MARGIN - scrollOffset;
 
         for (String modId : allModIds(grouped, valueGrouped, optionGrouped)) {
+            // 分组内全部条目都被隐藏时，连标题一起跳过
+            if (!groupHasVisibleContent(grouped, valueGrouped, optionGrouped, modId)) {
+                continue;
+            }
+
             // Mod 分组标题占用空间
             y += GROUP_HEADER_HEIGHT;
 
-            // 每个开关一个按钮
-            List<DebugToggleEntry> toggles = grouped.getOrDefault(modId, List.of());
+            // 每个开关一个按钮（仅渲染当前可见的；二级开关左缩进以区分层级）
+            List<DebugToggleEntry> toggles = visibleToggles(grouped, modId);
             for (DebugToggleEntry entry : toggles) {
                 if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
                     // 按钮在可视区域内
                     final DebugToggleEntry finalEntry = entry;
+                    int indent = entry.isSecondary() ? SECONDARY_INDENT : 0;
                     ButtonWidget btn = ButtonWidget.builder(
                             getToggleText(entry),
                             button -> {
                                 finalEntry.toggle();
                                 button.setMessage(getToggleText(finalEntry));
+                                // 二级开关值变化可能影响更深层条目的可见性，重建以即时反映
+                                rebuildWidgets();
                             }
-                    ).dimensions(centerX, y, BUTTON_WIDTH, BUTTON_HEIGHT).build();
+                    ).dimensions(centerX + indent, y, BUTTON_WIDTH - indent, BUTTON_HEIGHT).build();
                     this.addDrawableChild(btn);
                 }
                 y += GAP;
@@ -230,6 +273,11 @@ public class DebugMenuScreen extends Screen {
             int y = TOP_MARGIN - scrollOffset;
 
             for (String modId : allModIds(grouped, valueGrouped, optionGrouped)) {
+                // 与 rebuildWidgets 一致：整组不可见则跳过
+                if (!groupHasVisibleContent(grouped, valueGrouped, optionGrouped, modId)) {
+                    continue;
+                }
+
                 // 绘制 mod 分组标题
                 if (y > TOP_MARGIN - 15 && y < this.height - BOTTOM_MARGIN) {
                     String header = "── " + modId + " ──";
@@ -238,8 +286,8 @@ public class DebugMenuScreen extends Screen {
                 }
                 y += GROUP_HEADER_HEIGHT;
 
-                // 跳过按钮/滑条区域（布尔 + 数值）
-                int rows = grouped.getOrDefault(modId, List.of()).size()
+                // 跳过按钮/滑条区域（布尔 + 数值）；布尔只计可见条目，与 rebuildWidgets 保持一致
+                int rows = visibleToggles(grouped, modId).size()
                         + valueGrouped.getOrDefault(modId, List.of()).size()
                         + optionGrouped.getOrDefault(modId, List.of()).size();
                 y += rows * GAP;
