@@ -3,7 +3,6 @@ package com.debugmenu.client;
 import com.debugmenu.api.DebugMenuApi;
 import com.debugmenu.api.DebugOptionEntry;
 import com.debugmenu.api.DebugToggleEntry;
-import com.debugmenu.api.DebugValueEntry;
 import com.debugmenu.config.DebugMenuConfig;
 import com.debugmenu.log.InGameLogAppender;
 import com.debugmenu.network.DebugValueSyncS2CPacket;
@@ -35,21 +34,6 @@ public class DebugMenuClient implements ClientModInitializer {
 
     /** 行为日志开关状态（调试 Mod 自带功能） */
     private static boolean behaviorLogEnabled = false;
-
-    /** 测试滑条的本地值（客户端 UI 演示用，验证方案 B 数值通道） */
-    private static int testSliderValue = 10;
-
-    /** 测试二级滑条的本地值（演示滑条作为二级/条件显示条目，仅当一级开关开启时显示） */
-    private static int testChildSliderValue = 5;
-
-    /** 测试多状态开关的本地状态（演示"语言选择"式的多状态开关） */
-    private static String testLanguage = "English";
-
-    /** 测试一级开关状态（普通开关，始终可见） */
-    private static boolean testParentEnabled = false;
-
-    /** 测试二级开关状态（普通开关，仅当一级开关开启时在菜单显示） */
-    private static boolean testChildEnabled = false;
 
     /** “聊天框日志显示”开关在菜单中的唯一标识。 */
     private static final String LOG_TOGGLE_KEY = "debug-menu:log_display";
@@ -104,71 +88,6 @@ public class DebugMenuClient implements ClientModInitializer {
                 () -> levelToOption(InGameLogAppender.getMinLevel()),
                 (name) -> InGameLogAppender.setMinLevel(optionToLevel(name)),
                 DebugMenuApi.visibleWhenEnabled(LOG_TOGGLE_KEY)
-        ));
-
-        // 注册一个测试数值条目（客户端 UI 侧），验证方案 B 的滑条 + 同步。
-        // 标记 Side.CLIENT：单人环境下与 DebugMenuMod 注册的服务端条目区分开，避免值分裂/UI 重复。
-        testSliderValue = DebugMenuConfig.getValueState("test_slider", 10);
-        DebugMenuApi.registerValue(new DebugValueEntry(
-                "debug-menu", "debug-menu:test_slider", "测试滑条",
-                0, 32, 1,
-                () -> testSliderValue,
-                (v) -> {
-                    testSliderValue = v;
-                    DebugMenuConfig.setValueState("test_slider", v);
-                },
-                null, null, DebugValueEntry.Side.CLIENT
-        ));
-
-        // 注册一个测试多状态开关（客户端 UI 侧），演示"语言选择"式的自定义多状态开关。
-        // 状态名完全由注册方自定义，点击按钮在各状态之间循环切换。
-        testLanguage = DebugMenuConfig.getOptionState("test_language", "English");
-        DebugMenuApi.registerOption(new DebugOptionEntry(
-                "debug-menu", "debug-menu:test_language", "语言",
-                java.util.List.of("English", "简体中文", "日本語"),
-                () -> testLanguage,
-                (v) -> {
-                    testLanguage = v;
-                    DebugMenuConfig.setOptionState("test_language", v);
-                }
-        ));
-
-        // 注册测试一级开关（普通开关，始终可见）
-        testParentEnabled = DebugMenuConfig.getToggleState("test_parent", false);
-        DebugMenuApi.register(new DebugToggleEntry(
-                "debug-menu", "debug-menu:test_parent", "测试一级开关",
-                () -> testParentEnabled,
-                (enabled) -> {
-                    testParentEnabled = enabled;
-                    DebugMenuConfig.setToggleState("test_parent", enabled);
-                }
-        ));
-
-        // 注册测试二级开关（普通开关，仅当一级开关开启时显示）
-        testChildEnabled = DebugMenuConfig.getToggleState("test_child", false);
-        DebugMenuApi.register(new DebugToggleEntry(
-                "debug-menu", "debug-menu:test_child", "测试二级开关",
-                () -> testChildEnabled,
-                (enabled) -> {
-                    testChildEnabled = enabled;
-                    DebugMenuConfig.setToggleState("test_child", enabled);
-                },
-                DebugMenuApi.visibleWhenEnabled("debug-menu:test_parent")
-        ));
-
-        // 注册测试二级滑条（客户端 UI 侧）：演示滑条也能作为二级条目，仅当一级开关开启时显示。
-        // 与二级开关一致，靠 visibleWhen 谓词条件显示，并在菜单中左缩进以区分层级。
-        testChildSliderValue = DebugMenuConfig.getValueState("test_child_slider", 5);
-        DebugMenuApi.registerValue(new DebugValueEntry(
-                "debug-menu", "debug-menu:test_child_slider", "测试二级滑条",
-                0, 20, 1,
-                () -> testChildSliderValue,
-                (v) -> {
-                    testChildSliderValue = v;
-                    DebugMenuConfig.setValueState("test_child_slider", v);
-                },
-                null, null, DebugValueEntry.Side.CLIENT,
-                DebugMenuApi.visibleWhenEnabled("debug-menu:test_parent")
         ));
 
         // 注册实体 NBT 响应包的客户端接收器
