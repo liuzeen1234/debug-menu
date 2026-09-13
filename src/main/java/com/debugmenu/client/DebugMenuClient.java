@@ -5,6 +5,7 @@ import com.debugmenu.api.DebugOptionEntry;
 import com.debugmenu.api.DebugToggleEntry;
 import com.debugmenu.api.DebugValueEntry;
 import com.debugmenu.config.DebugMenuConfig;
+import com.debugmenu.log.InGameLogAppender;
 import com.debugmenu.network.DebugValueSyncS2CPacket;
 import com.debugmenu.network.EntityNbtResponseS2CPacket;
 import net.fabricmc.api.ClientModInitializer;
@@ -13,6 +14,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import org.apache.logging.log4j.Level;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +51,22 @@ public class DebugMenuClient implements ClientModInitializer {
     /** 测试二级开关状态（普通开关，仅当一级开关开启时在菜单显示） */
     private static boolean testChildEnabled = false;
 
+    /** “聊天框日志显示”开关在菜单中的唯一标识。 */
+    private static final String LOG_TOGGLE_KEY = "debug-menu:log_display";
+
+    /** “日志最低级别”选项在菜单中的唯一标识。 */
+    private static final String LOG_LEVEL_KEY = "debug-menu:log_level";
+
+    // 日志级别在菜单中的显示名（也是循环顺序：由粗到细）。
+    private static final String LEVEL_ERROR = "ERROR";
+    private static final String LEVEL_WARN = "WARN";
+    private static final String LEVEL_INFO = "INFO";
+    private static final String LEVEL_DEBUG = "DEBUG";
+
+    /** 供菜单渲染的日志级别选项顺序。 */
+    private static final java.util.List<String> LEVEL_OPTIONS =
+            java.util.List.of(LEVEL_ERROR, LEVEL_WARN, LEVEL_INFO, LEVEL_DEBUG);
+
     @Override
     public void onInitializeClient() {
         // 加载配置
@@ -65,6 +83,27 @@ public class DebugMenuClient implements ClientModInitializer {
                     behaviorLogEnabled = enabled;
                     DebugMenuConfig.setToggleState("behavior_log", enabled);
                 }
+        ));
+
+        // 安装“日志转发到聊天框”的 Log4j2 Appender（挂在 Root Logger 上，捕获所有模组的日志）。
+        // 默认开启，玩家可通过下面的“聊天框日志显示”开关随时开关。
+        InGameLogAppender.install();
+
+        // 注册“聊天框日志显示”开关（对应原 /ailog on|off，现改为菜单开关）。
+        DebugMenuApi.register(new DebugToggleEntry(
+                "debug-menu", LOG_TOGGLE_KEY, "聊天框日志显示",
+                InGameLogAppender::isEnabled,
+                InGameLogAppender::setEnabled
+        ));
+
+        // 注册“日志最低级别”二级选项（对应原 /ailog level <error|warn|info|debug>）。
+        // 仅当“聊天框日志显示”开关开启时才在菜单里显示。
+        DebugMenuApi.registerOption(new DebugOptionEntry(
+                "debug-menu", LOG_LEVEL_KEY, "日志最低级别",
+                LEVEL_OPTIONS,
+                () -> levelToOption(InGameLogAppender.getMinLevel()),
+                (name) -> InGameLogAppender.setMinLevel(optionToLevel(name)),
+                DebugMenuApi.visibleWhenEnabled(LOG_TOGGLE_KEY)
         ));
 
         // 注册一个测试数值条目（客户端 UI 侧），验证方案 B 的滑条 + 同步。
@@ -146,11 +185,14 @@ public class DebugMenuClient implements ClientModInitializer {
                 "category.debug-menu.general"
         ));
 
-        // 监听按键事件
+        // 监听按键事件 & 把捕获到的日志刷新到聊天框
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openDebugMenuKey.wasPressed()) {
                 client.setScreen(new DebugMenuScreen());
             }
+
+            // 将捕获的日志消息发送到聊天框（在主线程执行）
+            InGameLogAppender.flushToChat();
         });
 
         // 注册 HUD 渲染回调
@@ -160,5 +202,44 @@ public class DebugMenuClient implements ClientModInitializer {
         });
 
         LOGGER.info("[DebugMenu] Client initialized.");
+    }
+
+    /**
+     * Log4j2 级别 -> 菜单显示名。
+     *
+     * <p>只区分 ERROR / WARN / INFO / DEBUG 四档。FATAL 归入 ERROR，
+     * TRACE 及其余更细/未知级别归入 DEBUG（与该选项的最细档对齐）。
+     *
+     * @param level Log4j2 级别，可为 null（按最粗的 ERROR 处理）
+     */
+    private static String levelToOption(Level level) {
+        if (level == null || level == Level.ERROR || level == Level.FATAL) {
+            return LEVEL_ERROR;
+        }
+        if (level == Level.WARN) {
+            return LEVEL_WARN;
+        }
+        if (level == Level.INFO) {
+            return LEVEL_INFO;
+        }
+        return LEVEL_DEBUG;
+    }
+
+    /**
+     * 菜单显示名 -> Log4j2 级别。
+     *
+     * @param optionName WARN / INFO / DEBUG；其余（含 null / 未知）一律按 ERROR 处理
+     */
+    private static Level optionToLevel(String optionName) {
+        if (LEVEL_WARN.equals(optionName)) {
+            return Level.WARN;
+        }
+        if (LEVEL_INFO.equals(optionName)) {
+            return Level.INFO;
+        }
+        if (LEVEL_DEBUG.equals(optionName)) {
+            return Level.DEBUG;
+        }
+        return Level.ERROR;
     }
 }
