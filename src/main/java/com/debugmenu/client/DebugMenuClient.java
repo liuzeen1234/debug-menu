@@ -41,6 +41,9 @@ public class DebugMenuClient implements ClientModInitializer {
     /** “日志最低级别”选项在菜单中的唯一标识。 */
     private static final String LOG_LEVEL_KEY = "debug-menu:log_level";
 
+    /** “生成测试日志”按钮在菜单中的唯一标识。 */
+    private static final String TEST_LOG_KEY = "debug-menu:test_log";
+
     // 日志级别在菜单中的显示名（也是循环顺序：由粗到细）。
     private static final String LEVEL_ERROR = "ERROR";
     private static final String LEVEL_WARN = "WARN";
@@ -90,6 +93,20 @@ public class DebugMenuClient implements ClientModInitializer {
                 DebugMenuApi.visibleWhenEnabled(LOG_TOGGLE_KEY)
         ));
 
+        // 注册“生成测试日志”按钮。debug_menu 的 API 没有专门的“按钮”条目类型，
+        // 因此用 DebugToggleEntry 模拟瞬时按钮：getter 恒为 false（显示始终为关），
+        // 玩家点一下把状态切到 true 时触发一组测试日志，用于验证上面的“聊天框日志显示”
+        // 是否正常工作。（该功能原为 AI-helper 的 /aitest 命令，现整体内置到 debug_menu。）
+        DebugMenuApi.register(new DebugToggleEntry(
+                "debug-menu", TEST_LOG_KEY, "生成测试日志",
+                () -> Boolean.FALSE,
+                (enabled) -> {
+                    if (enabled) {
+                        generateTestLogs();
+                    }
+                }
+        ));
+
         // 注册实体 NBT 响应包的客户端接收器
         EntityNbtResponseS2CPacket.registerClientReceiver();
 
@@ -121,6 +138,20 @@ public class DebugMenuClient implements ClientModInitializer {
         });
 
         LOGGER.info("[DebugMenu] Client initialized.");
+    }
+
+    /**
+     * 生成一组测试日志（2 条 WARN/ERROR + 1 条 INFO），用于验证“聊天框日志显示”是否正常。
+     *
+     * <p>日志经 SLF4J 发出，最终由 Log4j2 Root Logger 上的 {@link InGameLogAppender} 捕获并
+     * 转发到聊天框。注意默认最低级别为 ERROR，因此默认只会看到 ERROR 行；把“日志最低级别”
+     * 调低后才能看到 WARN / INFO 行。
+     */
+    private static void generateTestLogs() {
+        LOGGER.warn("这是一条测试 WARN 日志 - 来自调试菜单“生成测试日志”按钮");
+        LOGGER.error("这是一条测试 ERROR 日志 - 来自调试菜单“生成测试日志”按钮");
+        LOGGER.error("模拟异常: NullPointerException at FakeClass.fakeMethod(FakeClass.java:42)");
+        LOGGER.info("这是一条测试 INFO 日志（默认级别下不会显示在聊天框）");
     }
 
     /**
