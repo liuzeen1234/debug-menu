@@ -57,6 +57,19 @@ Other available methods:
 
 The registry is backed by a `CopyOnWriteArrayList`, so reads are safe across threads.
 
+### Custom group display name
+
+The menu groups entries by `modId` and uses `modId` as the group header. To show a friendlier title, register a display name once during init:
+
+```java
+DebugMenuApi.setModDisplayName("my-mod", "My Mod");
+```
+
+- Applies to all entries under that `modId` (boolean toggles / numeric sliders / multi-state switches); call it just once.
+- When not set, the header falls back to `modId`, so it is fully backward compatible.
+- Grouping, collapsing and lookups still key off `modId`; changing the display name does not affect them.
+- Passing `null` or a blank string clears the registered name (falls back to `modId`); `getModDisplayName(modId)` reads the current name (returns `modId` when unset).
+
 ### Numeric entry (slider, with server sync)
 
 When you need an integer value constrained by min/max/step, register a `DebugValueEntry` and the menu renders it as a slider:

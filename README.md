@@ -57,6 +57,19 @@ DebugMenuApi.register(new DebugToggleEntry(
 
 注册表基于 `CopyOnWriteArrayList`，可安全地跨线程读取。
 
+### 自定义分组显示名
+
+菜单默认按 `modId` 分组并把 `modId` 当作分组标题。想让标题显示更友好的名字，在初始化时登记一次即可：
+
+```java
+DebugMenuApi.setModDisplayName("my-mod", "我的模组");
+```
+
+- 对该 `modId` 下的所有条目（布尔开关 / 数值滑条 / 多状态开关）统一生效，只需调用一次。
+- 未登记时标题回退显示 `modId`，完全向后兼容。
+- 分组、折叠、查找等仍以 `modId` 为键，改显示名不影响这些逻辑。
+- 传入 `null` 或空白串会清除已登记的显示名（回退到 `modId`）；`getModDisplayName(modId)` 可读取当前显示名（未登记则返回 `modId`）。
+
 ### 数值条目（滑条，支持服务端同步）
 
 需要一个受 min/max/step 约束的整数值时，用 `DebugValueEntry` 注册，菜单会渲染成滑条：

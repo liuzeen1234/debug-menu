@@ -465,7 +465,7 @@ public class DebugMenuScreen extends Screen {
                 // 绘制 mod 分组标题（折叠 ▶ / 展开 ▼），内容行的跳过由 forEachGroup 统一处理
                 if (headerY > TOP_MARGIN - 15 && headerY < this.height - BOTTOM_MARGIN) {
                     String arrow = collapsed ? "\u25B6" : "\u25BC";
-                    String header = arrow + " " + modId;
+                    String header = arrow + " " + DebugMenuApi.getModDisplayName(modId);
                     context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(header),
                             this.width / 2, headerY + 3, 0xFFFF55);
                 }
@@ -514,9 +514,9 @@ public class DebugMenuScreen extends Screen {
             if (found[0] != null) {
                 return;
             }
-            // 文本与 render 保持一致：箭头 + 空格 + modId，居中绘制
+            // 文本与 render 保持一致：箭头 + 空格 + 分组显示名（未登记则回退 modId），居中绘制
             String arrow = collapsed ? "\u25B6" : "\u25BC";
-            String header = arrow + " " + modId;
+            String header = arrow + " " + DebugMenuApi.getModDisplayName(modId);
             int textWidth = this.textRenderer.getWidth(header);
             int left = this.width / 2 - textWidth / 2;
             int right = this.width / 2 + textWidth / 2;

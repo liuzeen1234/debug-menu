@@ -1,6 +1,7 @@
 package com.debugmenu.api;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -51,6 +52,15 @@ public final class DebugMenuApi {
      */
     private static final List<DebugOptionEntry> optionEntries = new CopyOnWriteArrayList<>();
 
+    /**
+     * 分组显示名注册表：{@code modId -> 自定义显示名}。
+     *
+     * <p>菜单按 {@code modId} 分组，但标题可显示这里登记的人类可读名称；未登记时回退显示
+     * {@code modId} 本身。分组、折叠、查找等内部逻辑始终以 {@code modId} 为键，不受影响。
+     * 用 {@link ConcurrentHashMap} 保证与其它注册表一致的线程安全约定。
+     */
+    private static final Map<String, String> modDisplayNames = new ConcurrentHashMap<>();
+
     private DebugMenuApi() {}
 
     /**
@@ -100,6 +110,47 @@ public final class DebugMenuApi {
             grouped.computeIfAbsent(entry.getModId(), k -> new ArrayList<>()).add(entry);
         }
         return grouped;
+    }
+
+    // ==================== 分组显示名 ====================
+
+    /**
+     * 为某个 {@code modId} 设置菜单分组的显示名。
+     *
+     * <p>菜单标题会显示该名称；未设置时回退显示 {@code modId} 本身。后注册覆盖先注册；
+     * 传入 {@code null} 或空白串则清除已登记的显示名（回退到 {@code modId}）。
+     *
+     * <p>该设置对该 {@code modId} 下的所有条目（布尔开关 / 数值滑条 / 多状态开关）统一生效，
+     * 只需在初始化时调用一次。分组、折叠、查找仍以 {@code modId} 为键，不受影响。
+     *
+     * <pre>{@code
+     * DebugMenuApi.setModDisplayName("my-mod", "我的模组");
+     * }</pre>
+     *
+     * @param modId       目标 Mod 的 ID（用于分组的键）
+     * @param displayName 菜单标题显示的名称；为 null 或空白则清除
+     */
+    public static void setModDisplayName(String modId, String displayName) {
+        Objects.requireNonNull(modId, "modId cannot be null");
+        if (displayName == null || displayName.isBlank()) {
+            modDisplayNames.remove(modId);
+        } else {
+            modDisplayNames.put(modId, displayName);
+        }
+    }
+
+    /**
+     * 取某个 {@code modId} 的分组显示名。
+     *
+     * <p>未通过 {@link #setModDisplayName} 登记时回退返回 {@code modId} 本身，绝不返回 null，
+     * 因此菜单可直接用其渲染标题。
+     *
+     * @param modId 目标 Mod 的 ID
+     * @return 已登记的显示名，或回退的 {@code modId}
+     */
+    public static String getModDisplayName(String modId) {
+        String name = modDisplayNames.get(modId);
+        return name != null ? name : modId;
     }
 
     /**
