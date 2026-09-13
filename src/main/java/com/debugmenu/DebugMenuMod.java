@@ -21,6 +21,9 @@ public class DebugMenuMod implements ModInitializer {
     /** 测试滑条的服务端值（方案 B 演示：服务端权威状态）。 */
     private static int testSliderValue = 10;
 
+    /** 测试二级滑条的服务端值（演示二级滑条的服务端权威状态）。 */
+    private static int testChildSliderValue = 5;
+
     @Override
     public void onInitialize() {
         LOGGER.info("[DebugMenu] Debug Menu Mod initialized!");
@@ -41,6 +44,16 @@ public class DebugMenuMod implements ModInitializer {
                 0, 32, 1,
                 () -> testSliderValue,
                 (v) -> testSliderValue = v,
+                null, null, DebugValueEntry.Side.SERVER
+        ));
+
+        // 测试二级滑条（服务端侧）：与客户端同 key，setter 服务于收包后执行。
+        // 服务端条目无需可见性谓词——可见性是 UI（Side.CLIENT）的关注点。
+        DebugMenuApi.registerValue(new DebugValueEntry(
+                "debug-menu", "debug-menu:test_child_slider", "测试二级滑条",
+                0, 20, 1,
+                () -> testChildSliderValue,
+                (v) -> testChildSliderValue = v,
                 null, null, DebugValueEntry.Side.SERVER
         ));
     }

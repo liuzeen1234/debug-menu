@@ -192,6 +192,17 @@ public class DebugOptionEntry {
     }
 
     /**
+     * 该二级多状态开关依赖的父条目 key；若非"父子依赖"谓词或为一级开关则返回 {@code null}。
+     *
+     * <p>仅当注册时使用 {@link DebugMenuApi#visibleWhenEnabled(String)} /
+     * {@link DebugMenuApi#visibleWhenOption(String, String...)} 生成的谓词时才可反查父，
+     * 菜单据此把子开关自动排到父的下方。
+     */
+    public String getParentKey() {
+        return ParentedVisibility.parentKeyOf(visibleWhen);
+    }
+
+    /**
      * 当前是否应在菜单中显示。
      *
      * <p>未提供可见性谓词时恒为 {@code true}；否则实时求值该谓词，

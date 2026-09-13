@@ -13,6 +13,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -141,7 +142,7 @@ public class DebugMenuScreen extends Screen {
 
             if (!collapsed) {
                 int rows = visibleToggles(grouped, modId).size()
-                        + valueGrouped.getOrDefault(modId, List.of()).size()
+                        + visibleValues(valueGrouped, modId).size()
                         + visibleOptions(optionGrouped, modId).size();
                 y += rows * GAP;
                 y += 6; // 分组间距
@@ -166,6 +167,25 @@ public class DebugMenuScreen extends Screen {
     }
 
     /**
+     * 取某个 modId 下当前<b>可见</b>的数值条目（过滤掉可见性谓词为 false 的二级滑条）。
+     * 与 {@link #visibleToggles} 同理，供 {@link #forEachGroup} 统计行数与 {@link #rebuildWidgets}
+     * 创建滑条时共用，保证行数与实际滑条一致。
+     *
+     * <p>注意：传入的列表应已按 side 过滤/去重（见
+     * {@link DebugMenuApi#getValueEntriesByMod(DebugValueEntry.Side)}）。
+     */
+    private List<DebugValueEntry> visibleValues(Map<String, List<DebugValueEntry>> grouped, String modId) {
+        List<DebugValueEntry> all = grouped.getOrDefault(modId, List.of());
+        List<DebugValueEntry> result = new ArrayList<>(all.size());
+        for (DebugValueEntry entry : all) {
+            if (entry.isVisible()) {
+                result.add(entry);
+            }
+        }
+        return result;
+    }
+
+    /**
      * 取某个 modId 下当前<b>可见</b>的多状态开关（过滤掉可见性谓词为 false 的二级选项）。
      * 与 {@link #visibleToggles} 同理，供 {@link #forEachGroup} 统计行数与 {@link #rebuildWidgets}
      * 创建按钮时共用，保证行数与实际按钮一致。
@@ -182,6 +202,122 @@ public class DebugMenuScreen extends Screen {
     }
 
     /**
+     * 分组内一行内容的统一表示，用于跨三种条目类型做"子紧跟父"的排序。
+     *
+     * <p>三种条目（布尔开关 / 数值滑条 / 多状态开关）恰有一个非 null，其余为 null。
+     * {@code key} 是该条目的唯一标识，{@code parentKey} 是它依赖的父条目 key（无则为 null）。
+     */
+    private static final class Row {
+        final DebugToggleEntry toggle;
+        final DebugValueEntry value;
+        final DebugOptionEntry option;
+        final String key;
+        final String parentKey;
+
+        private Row(DebugToggleEntry toggle, DebugValueEntry value, DebugOptionEntry option,
+                    String key, String parentKey) {
+            this.toggle = toggle;
+            this.value = value;
+            this.option = option;
+            this.key = key;
+            this.parentKey = parentKey;
+        }
+
+        static Row of(DebugToggleEntry e) {
+            return new Row(e, null, null, e.getKey(), e.getParentKey());
+        }
+
+        static Row of(DebugValueEntry e) {
+            return new Row(null, e, null, e.getKey(), e.getParentKey());
+        }
+
+        static Row of(DebugOptionEntry e) {
+            return new Row(null, null, e, e.getKey(), e.getParentKey());
+        }
+    }
+
+    /**
+     * 组装某个 modId 分组内所有<b>可见</b>行，并把子条目稳定重排到父条目正下方（仅一层）。
+     *
+     * <p>初始顺序沿用历史布局：布尔开关 → 数值滑条 → 多状态开关，各段内按注册顺序。
+     * 随后做一次稳定归位：凡带 {@code parentKey} 且父条目也在本组可见集合内的行，插入到父行
+     * （及其已归位的兄弟）之后；父不在可见集合内、或本就没有父的行保持原相对顺序。
+     *
+     * <p>父子可以是不同类型（如父是布尔、子是滑条），因此必须在合并后的统一序列上排序。
+     * 只处理一层：子的子不做递归上提，仍按其"直接父"归位。
+     */
+    private List<Row> orderedRows(Map<String, List<DebugToggleEntry>> grouped,
+                                  Map<String, List<DebugValueEntry>> valueGrouped,
+                                  Map<String, List<DebugOptionEntry>> optionGrouped,
+                                  String modId) {
+        List<Row> initial = new ArrayList<>();
+        for (DebugToggleEntry e : visibleToggles(grouped, modId)) {
+            initial.add(Row.of(e));
+        }
+        for (DebugValueEntry e : visibleValues(valueGrouped, modId)) {
+            initial.add(Row.of(e));
+        }
+        for (DebugOptionEntry e : visibleOptions(optionGrouped, modId)) {
+            initial.add(Row.of(e));
+        }
+
+        // 本组可见 key 集合：只有父也可见时才归位，避免把子挂到一个不显示的父下面。
+        Set<String> presentKeys = new HashSet<>();
+        for (Row r : initial) {
+            presentKeys.add(r.key);
+        }
+
+        // 第一遍：把所有"父在本组可见"的子按初始顺序登记到父名下。子相对彼此保持稳定顺序，
+        // 且不论子在初始序列中位于父的前面还是后面，都能正确归位。
+        Map<String, List<Row>> childrenByParent = new HashMap<>();
+        for (Row r : initial) {
+            boolean hasResolvableParent = r.parentKey != null
+                    && presentKeys.contains(r.parentKey)
+                    && !r.parentKey.equals(r.key);
+            if (hasResolvableParent) {
+                childrenByParent.computeIfAbsent(r.parentKey, k -> new ArrayList<>()).add(r);
+            }
+        }
+
+        // 第二遍：按初始顺序输出所有"非子"行（顶层行），每落一个就把它名下的子递归紧跟其后。
+        // 子行在第二遍会被跳过（它们由 appendChildren 负责插入）。
+        List<Row> result = new ArrayList<>(initial.size());
+        for (Row r : initial) {
+            boolean isChild = r.parentKey != null
+                    && presentKeys.contains(r.parentKey)
+                    && !r.parentKey.equals(r.key);
+            if (isChild) {
+                continue;
+            }
+            result.add(r);
+            appendChildren(result, childrenByParent, r.key);
+        }
+        // 兜底：理论上不会发生（顶层行必已落位并带出其子）。若仍有挂起的子
+        // （例如父子互相引用形成环），按原顺序补到末尾，保证不丢行、不死循环。
+        for (List<Row> orphans : childrenByParent.values()) {
+            result.addAll(orphans);
+        }
+        return result;
+    }
+
+    /**
+     * 把某个父 key 下已登记的子行紧跟着追加到父后面。
+     *
+     * <p>子行落位后再递归处理"子的子"，使得链式依赖（父→子→孙）也能让每个条目
+     * 紧跟其<b>直接父</b>之下。{@code childrenByParent} 用 remove 消费，天然避免环导致的死循环。
+     */
+    private void appendChildren(List<Row> result, Map<String, List<Row>> childrenByParent, String parentKey) {
+        List<Row> children = childrenByParent.remove(parentKey);
+        if (children == null) {
+            return;
+        }
+        for (Row child : children) {
+            result.add(child);
+            appendChildren(result, childrenByParent, child.key);
+        }
+    }
+
+    /**
      * 该 modId 分组当前是否有任何可见内容（可见布尔开关 / 数值条目 / 多状态开关）。
      *
      * <p>若某分组下的开关全是被隐藏的二级开关且无其他条目，则整个分组（含标题）都不显示，
@@ -192,7 +328,7 @@ public class DebugMenuScreen extends Screen {
                                            Map<String, List<DebugOptionEntry>> optionGrouped,
                                            String modId) {
         return !visibleToggles(grouped, modId).isEmpty()
-                || !valueGrouped.getOrDefault(modId, List.of()).isEmpty()
+                || !visibleValues(valueGrouped, modId).isEmpty()
                 || !visibleOptions(optionGrouped, modId).isEmpty();
     }
 
@@ -233,55 +369,45 @@ public class DebugMenuScreen extends Screen {
             // 标题下方第一行按钮的起点
             int y = headerY + GROUP_HEADER_HEIGHT;
 
-            // 每个开关一个按钮（仅渲染当前可见的；二级开关左缩进以区分层级）
-            List<DebugToggleEntry> toggles = visibleToggles(grouped, modId);
-            for (DebugToggleEntry entry : toggles) {
-                if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
-                    // 按钮在可视区域内
-                    final DebugToggleEntry finalEntry = entry;
-                    int indent = entry.isSecondary() ? SECONDARY_INDENT : 0;
-                    ButtonWidget btn = ButtonWidget.builder(
-                            getToggleText(entry),
-                            button -> {
-                                finalEntry.toggle();
-                                button.setMessage(getToggleText(finalEntry));
-                                // 二级开关值变化可能影响更深层条目的可见性，重建以即时反映
-                                rebuildWidgets();
-                            }
-                    ).dimensions(centerX + indent, y, BUTTON_WIDTH - indent, BUTTON_HEIGHT).build();
-                    this.addDrawableChild(btn);
-                }
-                y += GAP;
-            }
-
-            // 每个数值条目一个滑条
-            List<DebugValueEntry> values = valueGrouped.getOrDefault(modId, List.of());
-            for (DebugValueEntry entry : values) {
-                if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
-                    DebugValueSliderWidget slider =
-                            new DebugValueSliderWidget(centerX, y, BUTTON_WIDTH, BUTTON_HEIGHT, entry);
-                    this.addDrawableChild(slider);
-                    visibleSliders.put(entry.getKey(), slider);
-                }
-                y += GAP;
-            }
-
-            // 每个多状态开关一个循环按钮（仅渲染当前可见的；二级选项左缩进以区分层级）
-            List<DebugOptionEntry> options = visibleOptions(optionGrouped, modId);
-            for (DebugOptionEntry entry : options) {
-                if (y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN) {
-                    final DebugOptionEntry finalEntry = entry;
-                    int indent = entry.isSecondary() ? SECONDARY_INDENT : 0;
-                    ButtonWidget btn = ButtonWidget.builder(
-                            getOptionText(entry),
-                            button -> {
-                                finalEntry.cycle();
-                                button.setMessage(getOptionText(finalEntry));
-                                // 与二级 toggle 一致：切换后重建，联动更深层条目的可见性
-                                rebuildWidgets();
-                            }
-                    ).dimensions(centerX + indent, y, BUTTON_WIDTH - indent, BUTTON_HEIGHT).build();
-                    this.addDrawableChild(btn);
+            // 统一有序序列：子条目已被稳定重排到父条目下方（不论注册顺序、不论条目类型）。
+            // 三种条目共用同一 y 累加，二级条目左缩进以区分层级。
+            for (Row row : orderedRows(grouped, valueGrouped, optionGrouped, modId)) {
+                boolean visibleArea = y + BUTTON_HEIGHT > TOP_MARGIN - 5 && y < this.height - BOTTOM_MARGIN;
+                if (visibleArea) {
+                    if (row.toggle != null) {
+                        final DebugToggleEntry finalEntry = row.toggle;
+                        int indent = finalEntry.isSecondary() ? SECONDARY_INDENT : 0;
+                        ButtonWidget btn = ButtonWidget.builder(
+                                getToggleText(finalEntry),
+                                button -> {
+                                    finalEntry.toggle();
+                                    button.setMessage(getToggleText(finalEntry));
+                                    // 二级开关值变化可能影响更深层条目的可见性，重建以即时反映
+                                    rebuildWidgets();
+                                }
+                        ).dimensions(centerX + indent, y, BUTTON_WIDTH - indent, BUTTON_HEIGHT).build();
+                        this.addDrawableChild(btn);
+                    } else if (row.value != null) {
+                        DebugValueEntry entry = row.value;
+                        int indent = entry.isSecondary() ? SECONDARY_INDENT : 0;
+                        DebugValueSliderWidget slider = new DebugValueSliderWidget(
+                                centerX + indent, y, BUTTON_WIDTH - indent, BUTTON_HEIGHT, entry);
+                        this.addDrawableChild(slider);
+                        visibleSliders.put(entry.getKey(), slider);
+                    } else if (row.option != null) {
+                        final DebugOptionEntry finalEntry = row.option;
+                        int indent = finalEntry.isSecondary() ? SECONDARY_INDENT : 0;
+                        ButtonWidget btn = ButtonWidget.builder(
+                                getOptionText(finalEntry),
+                                button -> {
+                                    finalEntry.cycle();
+                                    button.setMessage(getOptionText(finalEntry));
+                                    // 与二级 toggle 一致：切换后重建，联动更深层条目的可见性
+                                    rebuildWidgets();
+                                }
+                        ).dimensions(centerX + indent, y, BUTTON_WIDTH - indent, BUTTON_HEIGHT).build();
+                        this.addDrawableChild(btn);
+                    }
                 }
                 y += GAP;
             }

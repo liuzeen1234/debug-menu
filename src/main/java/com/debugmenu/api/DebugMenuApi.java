@@ -334,7 +334,7 @@ public final class DebugMenuApi {
      */
     public static java.util.function.Supplier<Boolean> visibleWhenEnabled(String parentKey) {
         Objects.requireNonNull(parentKey, "parentKey cannot be null");
-        return () -> isEnabled(parentKey);
+        return new ParentedVisibility(parentKey, () -> isEnabled(parentKey));
     }
 
     /**
@@ -358,7 +358,7 @@ public final class DebugMenuApi {
         Objects.requireNonNull(parentKey, "parentKey cannot be null");
         Objects.requireNonNull(states, "states cannot be null");
         final String[] wanted = states.clone();
-        return () -> {
+        return new ParentedVisibility(parentKey, () -> {
             String current = getSelectedOption(parentKey);
             if (current == null) {
                 return false;
@@ -369,6 +369,6 @@ public final class DebugMenuApi {
                 }
             }
             return false;
-        };
+        });
     }
 }

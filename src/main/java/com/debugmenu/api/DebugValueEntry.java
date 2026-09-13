@@ -77,9 +77,55 @@ public class DebugValueEntry {
     private final BiPredicate<ServerPlayerEntity, Integer> permission;
     /** 条目服务的逻辑侧，绝不为 null。 */
     private final Side side;
+    /** 可见性谓词；为 {@code null} 表示始终可见（顶层滑条）。 */
+    private final Supplier<Boolean> visibleWhen;
 
     /**
-     * 完整构造（带 side）。
+     * 完整构造（带 side 与可见性谓词）。
+     *
+     * @param modId       所属 Mod 的 ID
+     * @param key         唯一标识键（建议格式 "modId:feature_name"）
+     * @param displayName 菜单中显示的名称
+     * @param min         最小值（含）
+     * @param max         最大值（含）
+     * @param step        步长（必须 &gt; 0）
+     * @param getter      获取当前值
+     * @param setter      设置当前值（内部已 clamp）
+     * @param unitSuffix  可选单位后缀，可为 null
+     * @param permission  服务端权限判据，为 null 时使用 {@link #DEFAULT_PERMISSION}
+     * @param side        条目服务的逻辑侧，为 null 时使用 {@link Side#BOTH}
+     * @param visibleWhen 可见性谓词；返回 {@code false} 时不显示。传 {@code null} 等同于始终可见
+     *                    （即作为二级/条件显示滑条，可用 {@link DebugMenuApi#visibleWhenEnabled(String)}）
+     */
+    public DebugValueEntry(String modId, String key, String displayName,
+                           int min, int max, int step,
+                           Supplier<Integer> getter, Consumer<Integer> setter,
+                           String unitSuffix,
+                           BiPredicate<ServerPlayerEntity, Integer> permission,
+                           Side side,
+                           Supplier<Boolean> visibleWhen) {
+        if (max < min) {
+            throw new IllegalArgumentException("max (" + max + ") must be >= min (" + min + ")");
+        }
+        if (step <= 0) {
+            throw new IllegalArgumentException("step must be > 0, got " + step);
+        }
+        this.modId = modId;
+        this.key = key;
+        this.displayName = displayName;
+        this.min = min;
+        this.max = max;
+        this.step = step;
+        this.getter = getter;
+        this.setter = setter;
+        this.unitSuffix = unitSuffix;
+        this.permission = permission != null ? permission : DEFAULT_PERMISSION;
+        this.side = side != null ? side : Side.BOTH;
+        this.visibleWhen = visibleWhen;
+    }
+
+    /**
+     * 完整构造（带 side，无可见性谓词，始终可见）。
      *
      * @param modId       所属 Mod 的 ID
      * @param key         唯一标识键（建议格式 "modId:feature_name"）
@@ -99,23 +145,7 @@ public class DebugValueEntry {
                            String unitSuffix,
                            BiPredicate<ServerPlayerEntity, Integer> permission,
                            Side side) {
-        if (max < min) {
-            throw new IllegalArgumentException("max (" + max + ") must be >= min (" + min + ")");
-        }
-        if (step <= 0) {
-            throw new IllegalArgumentException("step must be > 0, got " + step);
-        }
-        this.modId = modId;
-        this.key = key;
-        this.displayName = displayName;
-        this.min = min;
-        this.max = max;
-        this.step = step;
-        this.getter = getter;
-        this.setter = setter;
-        this.unitSuffix = unitSuffix;
-        this.permission = permission != null ? permission : DEFAULT_PERMISSION;
-        this.side = side != null ? side : Side.BOTH;
+        this(modId, key, displayName, min, max, step, getter, setter, unitSuffix, permission, side, null);
     }
 
     /**
@@ -181,6 +211,36 @@ public class DebugValueEntry {
      */
     public boolean matchesSide(Side query) {
         return side.matches(query);
+    }
+
+    /**
+     * 是否为二级（条件显示）滑条，即注册时提供了可见性谓词。
+     *
+     * <p>菜单可据此对二级滑条做视觉区分（如缩进），与二级开关一致。
+     */
+    public boolean isSecondary() {
+        return visibleWhen != null;
+    }
+
+    /**
+     * 该二级滑条依赖的父条目 key；若非"父子依赖"谓词或为一级滑条则返回 {@code null}。
+     *
+     * <p>仅当注册时使用 {@link DebugMenuApi#visibleWhenEnabled(String)} /
+     * {@link DebugMenuApi#visibleWhenOption(String, String...)} 生成的谓词时才可反查父，
+     * 菜单据此把子滑条自动排到父的下方。
+     */
+    public String getParentKey() {
+        return ParentedVisibility.parentKeyOf(visibleWhen);
+    }
+
+    /**
+     * 当前是否应在菜单中显示。
+     *
+     * <p>未提供可见性谓词时恒为 {@code true}；否则实时求值该谓词，
+     * 谓词返回 {@code null} 视为不可见。
+     */
+    public boolean isVisible() {
+        return visibleWhen == null || Boolean.TRUE.equals(visibleWhen.get());
     }
 
     /**

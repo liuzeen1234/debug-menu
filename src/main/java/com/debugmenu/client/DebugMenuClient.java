@@ -37,6 +37,9 @@ public class DebugMenuClient implements ClientModInitializer {
     /** 测试滑条的本地值（客户端 UI 演示用，验证方案 B 数值通道） */
     private static int testSliderValue = 10;
 
+    /** 测试二级滑条的本地值（演示滑条作为二级/条件显示条目，仅当一级开关开启时显示） */
+    private static int testChildSliderValue = 5;
+
     /** 测试多状态开关的本地状态（演示"语言选择"式的多状态开关） */
     private static String testLanguage = "English";
 
@@ -111,6 +114,21 @@ public class DebugMenuClient implements ClientModInitializer {
                     testChildEnabled = enabled;
                     DebugMenuConfig.setToggleState("test_child", enabled);
                 },
+                DebugMenuApi.visibleWhenEnabled("debug-menu:test_parent")
+        ));
+
+        // 注册测试二级滑条（客户端 UI 侧）：演示滑条也能作为二级条目，仅当一级开关开启时显示。
+        // 与二级开关一致，靠 visibleWhen 谓词条件显示，并在菜单中左缩进以区分层级。
+        testChildSliderValue = DebugMenuConfig.getValueState("test_child_slider", 5);
+        DebugMenuApi.registerValue(new DebugValueEntry(
+                "debug-menu", "debug-menu:test_child_slider", "测试二级滑条",
+                0, 20, 1,
+                () -> testChildSliderValue,
+                (v) -> {
+                    testChildSliderValue = v;
+                    DebugMenuConfig.setValueState("test_child_slider", v);
+                },
+                null, null, DebugValueEntry.Side.CLIENT,
                 DebugMenuApi.visibleWhenEnabled("debug-menu:test_parent")
         ));
 
