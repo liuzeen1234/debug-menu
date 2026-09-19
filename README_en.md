@@ -31,6 +31,43 @@ Once enabled, player actions are written through the `DebugMenu` logger:
 - Items and interaction: dropping items, hotbar switching, item use, block right-click, block breaking
 - Client input: key presses, mouse clicks and scroll, screen open/close
 
+### List loaded mods: `/showmods`
+
+Type the command in chat to print the mods loaded in the current instance, one per line:
+
+- `/showmods`: lists only **feature mods** (green) and **inactive mods**, hiding libraries/built-ins.
+- `/showmods all`: lists **everything**, including greyed-out library/built-in entries.
+
+Each line is `[tag] display name [mod id]`:
+
+- **Display name**: prefers the name registered via `DebugMenuApi.setModDisplayName`; when none is registered, it falls back to the mod name Fabric detects (`name` in `fabric.mod.json`). The mod id is always appended for precise identification.
+- **Categories** (tags are rendered in Chinese in-game):
+  - **Feature mod** (green, no prefix) — a regular functional mod.
+  - **Library/built-in** (grey, `[库]`) — the loader, Java, Minecraft, the Fabric API family (`fabric-*`) and similar base libraries; hidden by default, shown only with `/showmods all`.
+  - **Inactive** (gold, `[未生效·仅XX端]`) — the environment declared in the metadata does not match the current side (e.g. a server-only mod on the client), so it is listed but does nothing on this side, kept distinct from loaded feature mods.
+
+Entries are ordered "feature → library → inactive", then by mod id, with a count summary on the last line. This is a client-side command (`fabric-command-api-v2`), usable in both single-player and multiplayer.
+
+Both forms also scan the `mods/` folder in the game directory and report jars that exist on disk but are **not active** (the runtime mod list never shows these):
+
+- **Disabled** (light purple, `[已禁用]`) — jars whose filename ends in `.disabled`, manually turned off.
+- **Not loaded** (red, `[未加载]`) — a plain `.jar` whose id is not in the runtime loaded set: usually a load failure, a missing dependency, or a non-Fabric jar.
+
+The scan reads `fabric.mod.json` inside each jar for its name, version and id (`[tag] name version [id] (filename)`); when the mod name can't be resolved (non-Fabric jar / no `fabric.mod.json` / parse failure), it falls back to the top-level Java package name inferred from the jar's `.class` entries (e.g. `com.example`, marked `(包名)`), and only shows the bare filename when even that can't be determined. The section is omitted when there are no disabled/unloaded jars. (Tags are rendered in Chinese in-game.)
+
+### Detect shader packs: `/showshaders`
+
+Scans the `shaderpacks/` folder in the game directory, prints the detected shader packs one per line, and marks the currently enabled one:
+
+- Walks the `.zip` files and subfolders in the directory; an entry containing a `shaders/` directory is treated as a shader pack, tagged `[光影]` (light purple); otherwise `[非光影]` (grey, likely a stray file).
+- Shader packs have no standard metadata name, so the display name is the **file/folder name** (`.zip` suffix stripped); folder-form packs are additionally marked `(文件夹)`.
+- The enabled shader is read from Iris (`config/iris.properties`) or OptiFine (`optionsshaders.txt`); the matching entry is prefixed with a green `[启用中]`, and a `当前启用: xxx` (currently enabled) line is appended. When none is set it shows "no shader enabled"; when the config names one that isn't found in the folder, it warns accordingly.
+- It respects the shader **master toggle**: in Iris the `shaderPack=` key only records the *last selected* pack and is not cleared when shaders are globally disabled, so the check also reads `enableShaders` — a value of `false` is always treated as "not enabled", avoiding a "disabled but shown as enabled" bug. OptiFine's off states (`(internal)` / `OFF` / `none`) are likewise treated as not enabled.
+- It first checks whether a **shader loader is present**: shaders can only be active when Iris (or Oculus) / OptiFine is actually loaded at runtime. If no loader is present (e.g. Iris disabled as `.jar.disabled`), the residual `shaderPack=` in the config is ignored, no pack is marked enabled, and the footer notes "no shader loader detected, shaders won't apply; residual selection in config: X".
+- It detects **load/compile failures**: when Iris is installed, it reflectively calls the Iris public API (`IrisApi.getInstance().isShaderPackInUse()`) to check whether a shader is *actually* in use — that method returns false when a pack fails to compile. If the config selects a pack and the file exists but Iris reports it isn't in use, that line is marked red `[未生效·可能加载失败]` (inactive, likely load failure), with a footer noting "selected X, but Iris reports it isn't active (check logs/latest.log)". Reflection avoids a hard dependency on Iris. OptiFine has no equivalent API, so when a loader is present but runtime state can't be queried, it falls back to treating the selected pack as enabled.
+
+Also a client-side command (`fabric-command-api-v2`). (Tags are rendered in Chinese in-game.)
+
 ### Persistent configuration
 
 Toggle states and HUD settings are stored in `config/debug-menu.json` and saved immediately on change, so they survive a restart.
