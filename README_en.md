@@ -17,6 +17,11 @@ A standalone debugging toolkit for Minecraft Fabric. It collects debug toggles, 
 
 Open the menu with a configurable keybind (unbound by default, set it under Options → Controls → Debug Menu). The screen reads every registered debug toggle and groups them by mod ID, with scrolling when the list overflows. If nothing is registered, only the built-in HUD settings entry is shown.
 
+
+### Simulate a key tap: `/click <key>`
+
+This client command simulates one press and release after chat closes. Examples: `/click M` opens the debug menu with its default binding, `/click K` triggers the action currently bound to K, `/click F5` switches perspective, and `/click SPACE` taps space. Key names are case-insensitive with autocomplete and follow current key bindings. Only single keyboard keys are supported; combinations, held keys, mouse input, and OS shortcuts are excluded. Migrated from AI Helper; AI Helper is not required.
+
 ### HUD overlays
 
 - **Entity health** (top-right): shows the name and health of the entity under your crosshair as `[name][current/max]`. Non-living entities render as `[name][-/-]`. Detailed NBT display can be enabled; the client requests entity NBT from the server and caches the response. Trace distance is configurable (1–256, default 128).

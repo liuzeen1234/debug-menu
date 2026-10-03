@@ -119,6 +119,9 @@ public class DebugMenuClient implements ClientModInitializer {
         // 注册 /showshaders 命令：扫描 shaderpacks 目录并标出当前启用的光影。
         ShowShadersCommand.register();
 
+        // 模拟一次键盘按键：/click <按键>
+        ClickKeyCommand.register();
+
         // 注册按键绑定: 打开调试功能菜单（默认按键 M）
         openDebugMenuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.debug-menu.open_debug_menu",
