@@ -6,6 +6,38 @@
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个游戏版本单独出包，产物名形如 `debug-menu-mc1.20.4-<版本>.jar`。
 
+## [1.0.2] - 2026-10-03
+
+### 新增
+
+- **`/click <key>` 命令**：在游戏内模拟单次键盘按键，聊天框关闭后立即执行，不干扰正常输入流程。
+  - 按键名取自 GLFW 常量（去除 `GLFW_KEY_` 前缀，不区分大小写），支持全部标准按键，例如 `K`、`F5`、`SPACE`、`LEFT_CONTROL`。
+  - 内置常用别名：`CTRL`、`SHIFT`、`ALT`、`ESC`、`RETURN`，无需记忆完整 GLFW 名称。
+  - 输入 `/click ` 后有自动补全提示（按字母序列出全部可用按键名）。
+  - 输入无效按键名时给出错误提示，并附示例。
+
+### 变更
+
+- Mod 版本从 `1.0.1` 升至 `1.0.2`。
+
+---
+
+## [1.0.2] - 2026-10-03 *(English)*
+
+### Added
+
+- **`/click <key>` command**: Simulates a single keyboard key tap in-game. The key press fires after the chat screen closes, so it doesn't interfere with normal input.
+  - Key names are derived from GLFW constants (strip `GLFW_KEY_` prefix, case-insensitive). All standard keys are supported — e.g. `K`, `F5`, `SPACE`, `LEFT_CONTROL`.
+  - Built-in aliases: `CTRL`, `SHIFT`, `ALT`, `ESC`, `RETURN`, so you don't need to remember the full GLFW name.
+  - Tab-completion lists all available key names in alphabetical order after `/click `.
+  - An invalid key name produces an error message with usage examples.
+
+### Changed
+
+- Mod version bumped from `1.0.1` to `1.0.2`.
+
+---
+
 ## [1.0.1] - 2026-09-19
 
 ### 新增
@@ -42,5 +74,6 @@
 - 配置持久化到 `config/debug-menu.json`。
 - 多版本支持：同一份源码可构建 Minecraft 1.20.1 / 1.20.4（`-Pmc` 选择目标）。
 
+[1.0.2]: https://github.com/liuzeen1234/debug_menu/releases/tag/v1.0.2
 [1.0.1]: https://github.com/liuzeen1234/debug_menu/releases/tag/v1.0.1
 [1.0.0]: https://github.com/liuzeen1234/debug_menu/releases/tag/v1.0.0
